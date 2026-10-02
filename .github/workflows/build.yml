@@ -366,7 +366,7 @@ jobs:
                   LinearLayout names = new LinearLayout(this);
                   names.setOrientation(LinearLayout.VERTICAL);
 
-                  nowTitle = textকোনো গান চলছে না", 14);
+                  nowTitle = text("কোনো গান চলছে না", 14);
                   nowTitle.setTypeface(TyTypefaceEFAULT, Typeface.BOLD);
 
                   nowArtist = text("সুর Music Player", 11);
