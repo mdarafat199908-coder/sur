@@ -368,7 +368,7 @@ jobs:
 
                   nowTitle = text("কোনো গান চলছে না", 14);
                   nowTitle.setTypeface(Typeface.DEFAULT, Typeface.BLOD);Typeface             nowArtist = text("সুর Music Player", 11);
-                  nowArtist.setTnowArtistGsetTextColor GRAY        names.addView(nowTitle);
+                  nowArtist.setTextColor(GRAY);        names.addView(nowTitle);
                   names.addView(namestist);
 
                   mini.addView(names,
