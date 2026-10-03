@@ -367,7 +367,7 @@ jobs:
                   names.setOrientation(LinearLayout.VERTICAL);
 
                   nowTitle = text("কোনো গান চলছে না", 14);
-                  nowTitle.setTypeface(Typeface.DEFAULT, Typeface.BLOD);
+                  nowTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
                   nowArtist = text("সুর Music Player", 11);
                   nowArtist.setTextColor(GRAY);
                   names.addView(nowTitle);
