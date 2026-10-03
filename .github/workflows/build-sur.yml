@@ -910,7 +910,7 @@ jobs:
           
               @Override
               public void onBackPressed() {
-                  if (fullPlayer != null)                 fullPlayer = null;
+                  if (fullPlayer != null) {                fullPlayer = null;
                       stopProgressUpdates();
                       setContentView(root);
                       return;
