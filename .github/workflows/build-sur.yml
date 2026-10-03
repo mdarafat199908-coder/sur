@@ -1,0 +1,953 @@
+name: Build Sur APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Create Android project
+        shell: bash
+        run: |
+          mkdir -p app/src/main/java/com/sur/music
+          mkdir -p app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+
+          rootProject.name = "Sur"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.6.1' apply false
+          }
+          EOF
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.sur.music'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.sur.music'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 2
+                  versionName '1.1'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+              <application
+                  android:theme="@style/AppTheme"
+                  android:label="Sur"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:screenOrientation="portrait"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/values/styles.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+                  <item name="android:fontFamily">sans</item>
+                  <item name="android:windowLightStatusBar">false</item>
+                  <item name="android:statusBarColor">#050D18</item>
+                  <item name="android:navigationBarColor">#050D18</item>
+                  <item name="android:colorAccent">#B148FF</item>
+                  <item name="android:windowActionModeOverlay">true</item>
+              </style>
+          </resources>
+          EOF
+
+          cat > app/src/main/java/com/sur/music/MainActivity.java <<'EOF'
+          package com.sur.music;
+          
+          import android.Manifest;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.os.Build;
+          import android.content.pm.PackageManager;
+          import android.content.ContentUris;
+          import android.database.Cursor;
+          import android.net.Uri;
+          import android.provider.MediaStore;
+          import android.media.MediaPlayer;
+          import android.graphics.Color;
+          import android.graphics.Typeface;
+          import android.graphics.drawable.GradientDrawable;
+          import android.view.Gravity;
+          import android.view.View;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.widget.*;
+          import java.util.ArrayList;
+          import java.util.HashSet;
+          import java.util.Set;
+          
+          public class MainActivity extends Activity {
+          
+              static final int PERMISSION_CODE = 10;
+          
+              LinearLayout root, content, miniPlayer, bottomNav;
+              EditText search;
+              TextView miniTitle, miniArtist;
+              ImageView miniArt;
+              Button miniPlay, miniNext;
+          
+              LinearLayout fullPlayer;
+              ImageView fullArt;
+              TextView fullTitle, fullArtist, elapsedText, durationText;
+              SeekBar progressBar;
+              Button fullPlay;
+              Handler progressHandler = new Handler(Looper.getMainLooper());
+              Runnable progressUpdater;
+          
+              ArrayList<String> songNames = new ArrayList<>();
+              ArrayList<String> songArtists = new ArrayList<>();
+              ArrayList<Uri> songUris = new ArrayList<>();
+              ArrayList<Uri> songArts = new ArrayList<>();
+              Set<String> favorites = new HashSet<>();
+          
+              MediaPlayer player;
+              int current = -1;
+          
+              final int BG = Color.rgb(5, 13, 24);
+              final int CARD = Color.rgb(18, 29, 45);
+              final int CARD2 = Color.rgb(24, 37, 56);
+              final int PURPLE = Color.rgb(177, 72, 255);
+              final int PINK = Color.rgb(255, 62, 125);
+              final int WHITE = Color.WHITE;
+              final int GRAY = Color.rgb(165, 176, 193);
+          
+              int dp(float v) {
+                  return (int)(v * getResources().getDisplayMetrics().density + 0.5f);
+              }
+          
+              @Override
+              protected void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  buildUI();
+                  if (hasPermission()) loadSongs();
+                  else showPermission();
+              }
+          
+              boolean hasPermission() {
+                  if (Build.VERSION.SDK_INT >= 33)
+                      return checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
+                              == PackageManager.PERMISSION_GRANTED;
+                  return checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                          == PackageManager.PERMISSION_GRANTED;
+              }
+          
+              void requestMusicPermission() {
+                  if (Build.VERSION.SDK_INT >= 33)
+                      requestPermissions(new String[]{Manifest.permission.READ_MEDIA_AUDIO}, PERMISSION_CODE);
+                  else
+                      requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_CODE);
+              }
+          
+              TextView tv(String s, float size) {
+                  TextView t = new TextView(this);
+                  t.setText(s);
+                  t.setTextSize(size);
+                  t.setTextColor(WHITE);
+                  return t;
+              }
+          
+              GradientDrawable bg(int color, float radius) {
+                  GradientDrawable g = new GradientDrawable();
+                  g.setColor(color);
+                  g.setCornerRadius(dp(radius));
+                  return g;
+              }
+          
+              Button btn(String s) {
+                  Button b = new Button(this);
+                  b.setText(s);
+                  b.setTextColor(WHITE);
+                  b.setTextSize(13);
+                  b.setAllCaps(false);
+                  b.setGravity(Gravity.CENTER);
+                  b.setMinHeight(0);
+                  b.setMinWidth(0);
+                  b.setPadding(dp(2), 0, dp(2), 0);
+                  b.setBackgroundColor(Color.TRANSPARENT);
+                  return b;
+              }
+          
+              ImageView artView(Uri art, int size) {
+                  ImageView iv = new ImageView(this);
+                  iv.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                  iv.setImageResource(android.R.drawable.ic_menu_gallery);
+                  iv.setBackground(bg(CARD2, 10));
+                  if (art != null) {
+                      try { iv.setImageURI(art); } catch (Exception ignored) {}
+                  }
+                  return iv;
+              }
+          
+              void buildUI() {
+                  root = new LinearLayout(this);
+                  root.setOrientation(LinearLayout.VERTICAL);
+                  root.setBackgroundColor(BG);
+          
+                  // Header
+                  LinearLayout header = new LinearLayout(this);
+                  header.setGravity(Gravity.CENTER_VERTICAL);
+                  header.setPadding(dp(16), dp(8), dp(12), dp(4));
+          
+                  TextView logo = tv("♫", 32);
+                  logo.setTextColor(PURPLE);
+                  header.addView(logo, new LinearLayout.LayoutParams(dp(42), dp(52)));
+          
+                  TextView title = tv("Sur", 27);
+                  title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  header.addView(title, new LinearLayout.LayoutParams(0, dp(52), 1));
+          
+                  TextView searchIcon = tv("⌕", 28);
+                  searchIcon.setGravity(Gravity.CENTER);
+                  searchIcon.setOnClickListener(v -> search.requestFocus());
+                  header.addView(searchIcon, new LinearLayout.LayoutParams(dp(45), dp(52)));
+          
+                  TextView menu = tv("⋮", 28);
+                  menu.setGravity(Gravity.CENTER);
+                  header.addView(menu, new LinearLayout.LayoutParams(dp(35), dp(52)));
+                  root.addView(header);
+          
+                  // Search
+                  search = new EditText(this);
+                  search.setHint("গান, শিল্পী, অ্যালবাম খুঁজুন...");
+                  search.setHintTextColor(GRAY);
+                  search.setTextColor(WHITE);
+                  search.setSingleLine(true);
+                  search.setTextSize(15);
+                  search.setPadding(dp(16), 0, dp(16), 0);
+                  search.setBackground(bg(CARD, 18));
+                  LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(-1, dp(48));
+                  sp.setMargins(dp(12), dp(2), dp(12), dp(8));
+                  root.addView(search, sp);
+          
+                  ScrollView scroll = new ScrollView(this);
+                  scroll.setFillViewport(true);
+                  content = new LinearLayout(this);
+                  content.setOrientation(LinearLayout.VERTICAL);
+                  content.setPadding(0, 0, 0, dp(8));
+                  scroll.addView(content);
+                  root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+          
+                  createMiniPlayer();
+                  createBottomNav();
+          
+                  setContentView(root);
+          
+                  search.addTextChangedListener(new android.text.TextWatcher() {
+                      public void beforeTextChanged(CharSequence s, int a, int c, int d) {}
+                      public void onTextChanged(CharSequence s, int a, int b, int c) {
+                          filterSongs(s.toString());
+                      }
+                      public void afterTextChanged(android.text.Editable e) {}
+                  });
+              }
+          
+              void createMiniPlayer() {
+                  miniPlayer = new LinearLayout(this);
+                  miniPlayer.setGravity(Gravity.CENTER_VERTICAL);
+                  miniPlayer.setPadding(dp(8), dp(4), dp(6), dp(4));
+                  miniPlayer.setBackgroundColor(Color.rgb(11, 19, 32));
+                  miniPlayer.setOnClickListener(v -> showFullPlayer());
+          
+                  miniArt = artView(null, 48);
+                  miniPlayer.addView(miniArt, new LinearLayout.LayoutParams(dp(48), dp(48)));
+          
+                  LinearLayout names = new LinearLayout(this);
+                  names.setOrientation(LinearLayout.VERTICAL);
+                  names.setGravity(Gravity.CENTER_VERTICAL);
+                  names.setPadding(dp(10), 0, dp(4), 0);
+          
+                  miniTitle = tv("কোনো গান চলছে না", 14);
+                  miniTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  miniArtist = tv("Sur Music Player", 11);
+                  miniArtist.setTextColor(GRAY);
+                  names.addView(miniTitle);
+                  names.addView(miniArtist);
+          
+                  miniPlayer.addView(names, new LinearLayout.LayoutParams(0, dp(48), 1));
+          
+                  miniPlay = btn("▶");
+                  miniPlay.setTextSize(20);
+                  miniPlay.setOnClickListener(v -> togglePlay());
+                  miniPlayer.addView(miniPlay, new LinearLayout.LayoutParams(dp(48), dp(48)));
+          
+                  miniNext = btn("⏭");
+                  miniNext.setTextSize(18);
+                  miniNext.setOnClickListener(v -> nextSong());
+                  miniPlayer.addView(miniNext, new LinearLayout.LayoutParams(dp(48), dp(48)));
+          
+                  root.addView(miniPlayer);
+              }
+          
+              void createBottomNav() {
+                  bottomNav = new LinearLayout(this);
+                  bottomNav.setGravity(Gravity.CENTER);
+                  bottomNav.setPadding(dp(4), dp(3), dp(4), dp(3));
+                  bottomNav.setBackgroundColor(Color.rgb(9, 16, 28));
+          
+                  String[] icons = {"⌂\nHome", "♫\nSongs", "♥\nFavorites", "⌕\nSearch", "⚙\nSettings"};
+                  for (String n : icons) {
+                      Button b = btn(n);
+                      b.setTextSize(10);
+                      bottomNav.addView(b, new LinearLayout.LayoutParams(0, dp(58), 1));
+                      if (n.contains("Home")) b.setOnClickListener(v -> showHome());
+                      else if (n.contains("Songs")) b.setOnClickListener(v -> showSongs());
+                      else if (n.contains("Favorites")) b.setOnClickListener(v -> showFavorites());
+                      else if (n.contains("Search")) b.setOnClickListener(v -> search.requestFocus());
+                      else b.setOnClickListener(v -> Toast.makeText(this, "Settings শিগগিরই যোগ হবে", Toast.LENGTH_SHORT).show());
+                  }
+                  root.addView(bottomNav);
+              }
+          
+              void showPermission() {
+                  content.removeAllViews();
+                  LinearLayout box = new LinearLayout(this);
+                  box.setOrientation(LinearLayout.VERTICAL);
+                  box.setGravity(Gravity.CENTER);
+                  box.setPadding(dp(25), dp(60), dp(25), dp(20));
+          
+                  TextView icon = tv("♫", 64);
+                  icon.setTextColor(PURPLE);
+                  icon.setGravity(Gravity.CENTER);
+                  box.addView(icon);
+          
+                  TextView t = tv("আপনার ফোনের গান দেখতে\nMusic permission দিন", 19);
+                  t.setGravity(Gravity.CENTER);
+                  box.addView(t);
+          
+                  Button b = btn("🎵 গান দেখান");
+                  b.setTextSize(16);
+                  b.setBackground(bg(PURPLE, 18));
+                  b.setOnClickListener(v -> requestMusicPermission());
+                  LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(-1, dp(52));
+                  bp.setMargins(0, dp(20), 0, 0);
+                  box.addView(b, bp);
+                  content.addView(box);
+              }
+          
+              void loadSongs() {
+                  songNames.clear(); songArtists.clear(); songUris.clear(); songArts.clear();
+                  Uri collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                  String[] projection = {
+                      MediaStore.Audio.Media._ID,
+                      MediaStore.Audio.Media.TITLE,
+                      MediaStore.Audio.Media.ARTIST,
+                      MediaStore.Audio.Media.ALBUM_ID
+                  };
+                  Cursor c = getContentResolver().query(
+                      collection, projection,
+                      MediaStore.Audio.Media.IS_MUSIC + " != 0",
+                      null, MediaStore.Audio.Media.TITLE + " ASC"
+                  );
+          
+                  if (c != null) {
+                      int idCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media._ID);
+                      int titleCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE);
+                      int artistCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST);
+                      int albumCol = c.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID);
+          
+                      while (c.moveToNext()) {
+                          long id = c.getLong(idCol);
+                          String name = c.getString(titleCol);
+                          String artist = c.getString(artistCol);
+                          long albumId = c.getLong(albumCol);
+          
+                          if (name == null || name.trim().isEmpty()) name = "Unknown Song";
+                          if (artist == null || artist.equals("<unknown>") || artist.trim().isEmpty())
+                              artist = "Unknown Artist";
+          
+                          songNames.add(name);
+                          songArtists.add(artist);
+                          songUris.add(ContentUris.withAppendedId(collection, id));
+                          songArts.add(Uri.parse("content://media/external/audio/albumart/" + albumId));
+                      }
+                      c.close();
+                  }
+                  showHome();
+              }
+          
+              void addHeader(String title, String subtitle) {
+                  TextView h = tv(title, 23);
+                  h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  h.setPadding(dp(16), dp(12), dp(16), dp(3));
+                  content.addView(h);
+          
+                  if (subtitle != null) {
+                      TextView s = tv(subtitle, 13);
+                      s.setTextColor(GRAY);
+                      s.setPadding(dp(16), 0, dp(16), dp(9));
+                      content.addView(s);
+                  }
+              }
+          
+              void showHome() {
+                  content.removeAllViews();
+          
+                  addHeader("Recently Played", songNames.size() + " টি গান পাওয়া গেছে");
+          
+                  // Horizontal feature cards
+                  if (!songNames.isEmpty()) {
+                      HorizontalScrollView hsv = new HorizontalScrollView(this);
+                      hsv.setHorizontalScrollBarEnabled(false);
+                      LinearLayout cards = new LinearLayout(this);
+                      cards.setPadding(dp(14), dp(4), dp(8), dp(10));
+          
+                      int count = Math.min(6, songNames.size());
+                      for (int i = 0; i < count; i++) {
+                          final int p = i;
+                          LinearLayout card = new LinearLayout(this);
+                          card.setOrientation(LinearLayout.VERTICAL);
+                          card.setPadding(dp(4), dp(4), dp(4), dp(4));
+                          card.setOnClickListener(v -> playSong(p));
+          
+                          ImageView iv = artView(songArts.get(i), 108);
+                          card.addView(iv, new LinearLayout.LayoutParams(dp(108), dp(108)));
+          
+                          TextView n = tv(songNames.get(i), 13);
+                          n.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                          n.setMaxLines(1);
+                          n.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                          card.addView(n, new LinearLayout.LayoutParams(dp(108), dp(28)));
+          
+                          TextView a = tv(songArtists.get(i), 11);
+                          a.setTextColor(GRAY);
+                          a.setMaxLines(1);
+                          a.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                          card.addView(a, new LinearLayout.LayoutParams(dp(108), dp(22)));
+          
+                          LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(dp(116), dp(164));
+                          cp.setMargins(0, 0, dp(7), 0);
+                          cards.addView(card, cp);
+                      }
+                      hsv.addView(cards);
+                      content.addView(hsv);
+                  }
+          
+                  addHeader("Made for You", null);
+                  LinearLayout made = new LinearLayout(this);
+                  made.setPadding(dp(14), dp(2), dp(10), dp(8));
+          
+                  addTile(made, "♥", "Liked Songs", "আপনার পছন্দের গান");
+                  addTile(made, "♫", "Bangla Hits", songNames.size() + " songs");
+                  addTile(made, "☀", "Chill Vibes", "Relax & enjoy");
+          
+                  content.addView(made);
+          
+                  addHeader("All Songs", null);
+                  showSongList(songNames, true);
+              }
+          
+              void addTile(LinearLayout parent, String icon, String title, String sub) {
+                  LinearLayout tile = new LinearLayout(this);
+                  tile.setOrientation(LinearLayout.VERTICAL);
+                  tile.setGravity(Gravity.CENTER);
+                  tile.setPadding(dp(5), dp(5), dp(5), dp(5));
+                  tile.setBackground(bg(CARD, 14));
+          
+                  TextView ic = tv(icon, 30);
+                  ic.setTextColor(PURPLE);
+                  ic.setGravity(Gravity.CENTER);
+                  tile.addView(ic, new LinearLayout.LayoutParams(-1, dp(42)));
+          
+                  TextView t = tv(title, 12);
+                  t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  t.setGravity(Gravity.CENTER);
+                  tile.addView(t);
+          
+                  TextView s = tv(sub, 9);
+                  s.setTextColor(GRAY);
+                  s.setGravity(Gravity.CENTER);
+                  s.setMaxLines(1);
+                  tile.addView(s);
+          
+                  LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(104), 1);
+                  p.setMargins(dp(4), 0, dp(4), 0);
+                  parent.addView(tile, p);
+              }
+          
+              void showSongs() {
+                  content.removeAllViews();
+                  addHeader("Songs", songNames.size() + " songs");
+                  showSongList(songNames, false);
+              }
+          
+              void showSongList(ArrayList<String> list, boolean compact) {
+                  for (int i = 0; i < songNames.size(); i++) {
+                      if (!list.contains(songNames.get(i))) continue;
+                      final int pos = i;
+          
+                      LinearLayout row = new LinearLayout(this);
+                      row.setGravity(Gravity.CENTER_VERTICAL);
+                      row.setPadding(dp(12), dp(5), dp(6), dp(5));
+          
+                      ImageView iv = artView(songArts.get(i), 50);
+                      row.addView(iv, new LinearLayout.LayoutParams(dp(50), dp(50)));
+          
+                      LinearLayout info = new LinearLayout(this);
+                      info.setOrientation(LinearLayout.VERTICAL);
+                      info.setGravity(Gravity.CENTER_VERTICAL);
+                      info.setPadding(dp(11), 0, dp(5), 0);
+          
+                      TextView name = tv(songNames.get(i), compact ? 16 : 15);
+                      name.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                      name.setMaxLines(1);
+                      name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+          
+                      TextView artist = tv(songArtists.get(i), 12);
+                      artist.setTextColor(GRAY);
+                      artist.setMaxLines(1);
+                      artist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+          
+                      info.addView(name);
+                      info.addView(artist);
+                      row.addView(info, new LinearLayout.LayoutParams(0, dp(58), 1));
+          
+                      Button fav = btn(favorites.contains(songNames.get(i)) ? "♥" : "♡");
+                      fav.setTextSize(22);
+                      fav.setTextColor(PINK);
+                      fav.setOnClickListener(v -> {
+                          String n = songNames.get(pos);
+                          if (favorites.contains(n)) {
+                              favorites.remove(n); fav.setText("♡");
+                          } else {
+                              favorites.add(n); fav.setText("♥");
+                          }
+                      });
+                      row.addView(fav, new LinearLayout.LayoutParams(dp(48), dp(58)));
+          
+                      row.setOnClickListener(v -> playSong(pos));
+                      content.addView(row);
+          
+                      View line = new View(this);
+                      line.setBackgroundColor(Color.rgb(29, 41, 57));
+                      content.addView(line, new LinearLayout.LayoutParams(-1, 1));
+                  }
+              }
+          
+              void filterSongs(String q) {
+                  if (q.trim().isEmpty()) { showHome(); return; }
+          
+                  content.removeAllViews();
+                  addHeader("Search", "ফলাফল");
+          
+                  ArrayList<String> result = new ArrayList<>();
+                  String query = q.toLowerCase();
+          
+                  for (int i = 0; i < songNames.size(); i++) {
+                      if (songNames.get(i).toLowerCase().contains(query)
+                              || songArtists.get(i).toLowerCase().contains(query)) {
+                          result.add(songNames.get(i));
+                      }
+                  }
+          
+                  if (result.isEmpty()) {
+                      TextView no = tv("কোনো গান পাওয়া যায়নি", 17);
+                      no.setGravity(Gravity.CENTER);
+                      content.addView(no, new LinearLayout.LayoutParams(-1, dp(120)));
+                  } else showSongList(result, false);
+              }
+          
+              void showFavorites() {
+                  content.removeAllViews();
+                  addHeader("♥ Favorites", favorites.size() + " songs");
+          
+                  ArrayList<String> list = new ArrayList<>();
+                  for (String s : songNames) if (favorites.contains(s)) list.add(s);
+          
+                  if (list.isEmpty()) {
+                      TextView e = tv("এখনো কোনো Favorite গান নেই", 17);
+                      e.setGravity(Gravity.CENTER);
+                      content.addView(e, new LinearLayout.LayoutParams(-1, dp(140)));
+                  } else showSongList(list, false);
+              }
+          
+              // =========================================
+              // FULL NOW PLAYING SCREEN
+              // =========================================
+          
+              TextView centerText(String s, float size) {
+                  TextView t = tv(s, size);
+                  t.setGravity(Gravity.CENTER);
+                  return t;
+              }
+          
+              Button controlButton(String s, float size) {
+                  Button b = btn(s);
+                  b.setTextSize(size);
+                  b.setTextColor(WHITE);
+                  b.setBackground(bg(Color.TRANSPARENT, 50));
+                  return b;
+              }
+          
+              void showFullPlayer() {
+                  if (current < 0 || current >= songNames.size()) {
+                      if (!songUris.isEmpty()) playSong(0);
+                      else return;
+                  }
+          
+                  fullPlayer = new LinearLayout(this);
+                  fullPlayer.setOrientation(LinearLayout.VERTICAL);
+                  fullPlayer.setPadding(dp(14), dp(8), dp(14), dp(18));
+                  fullPlayer.setBackgroundColor(BG);
+          
+                  // Top bar
+                  LinearLayout top = new LinearLayout(this);
+                  top.setGravity(Gravity.CENTER_VERTICAL);
+          
+                  Button close = btn("⌄");
+                  close.setTextSize(28);
+                  close.setOnClickListener(v -> closeFullPlayer());
+                  top.addView(close, new LinearLayout.LayoutParams(dp(48), dp(52)));
+          
+                  TextView playing = centerText("NOW PLAYING", 12);
+                  playing.setTextColor(GRAY);
+                  playing.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  top.addView(playing, new LinearLayout.LayoutParams(0, dp(52), 1));
+          
+                  Button more = btn("⋮");
+                  more.setTextSize(25);
+                  top.addView(more, new LinearLayout.LayoutParams(dp(48), dp(52)));
+                  fullPlayer.addView(top);
+          
+                  // Album art
+                  fullArt = artView(current >= 0 ? songArts.get(current) : null, 300);
+                  fullArt.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                  LinearLayout.LayoutParams artParams = new LinearLayout.LayoutParams(-1, 0, 1.0f);
+                  artParams.setMargins(dp(12), dp(8), dp(12), dp(18));
+                  fullPlayer.addView(fullArt, artParams);
+          
+                  // Title + favorite
+                  LinearLayout titleRow = new LinearLayout(this);
+                  titleRow.setGravity(Gravity.CENTER_VERTICAL);
+          
+                  LinearLayout titleBox = new LinearLayout(this);
+                  titleBox.setOrientation(LinearLayout.VERTICAL);
+          
+                  fullTitle = tv(current >= 0 ? songNames.get(current) : "", 22);
+                  fullTitle.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+                  fullTitle.setMaxLines(1);
+                  fullTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+          
+                  fullArtist = tv(current >= 0 ? songArtists.get(current) : "", 14);
+                  fullArtist.setTextColor(GRAY);
+                  fullArtist.setMaxLines(1);
+                  fullArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+          
+                  titleBox.addView(fullTitle);
+                  titleBox.addView(fullArtist);
+                  titleRow.addView(titleBox, new LinearLayout.LayoutParams(0, dp(60), 1));
+          
+                  Button heart = btn(favorites.contains(songNames.get(current)) ? "♥" : "♡");
+                  heart.setTextSize(28);
+                  heart.setTextColor(PINK);
+                  heart.setOnClickListener(v -> {
+                      String n = songNames.get(current);
+                      if (favorites.contains(n)) {
+                          favorites.remove(n);
+                          heart.setText("♡");
+                      } else {
+                          favorites.add(n);
+                          heart.setText("♥");
+                      }
+                  });
+                  titleRow.addView(heart, new LinearLayout.LayoutParams(dp(58), dp(60)));
+                  fullPlayer.addView(titleRow);
+          
+                  // Progress
+                  LinearLayout timeRow = new LinearLayout(this);
+                  timeRow.setGravity(Gravity.CENTER_VERTICAL);
+          
+                  elapsedText = tv("0:00", 11);
+                  elapsedText.setTextColor(GRAY);
+                  timeRow.addView(elapsedText, new LinearLayout.LayoutParams(dp(45), dp(28)));
+          
+                  progressBar = new SeekBar(this);
+                  progressBar.setMax(1000);
+                  progressBar.setProgress(0);
+                  progressBar.setProgressTintList(android.content.res.ColorStateList.valueOf(PURPLE));
+                  progressBar.setThumbTintList(android.content.res.ColorStateList.valueOf(Color.WHITE));
+                  progressBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                      public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                          if (fromUser && player != null && player.getDuration() > 0) {
+                              player.seekTo((int)(player.getDuration() * (progress / 1000f)));
+                          }
+                      }
+                      public void onStartTrackingTouch(SeekBar seekBar) {}
+                      public void onStopTrackingTouch(SeekBar seekBar) {}
+                  });
+                  timeRow.addView(progressBar, new LinearLayout.LayoutParams(0, dp(35), 1));
+          
+                  durationText = tv("0:00", 11);
+                  durationText.setTextColor(GRAY);
+                  durationText.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                  timeRow.addView(durationText, new LinearLayout.LayoutParams(dp(45), dp(28)));
+                  fullPlayer.addView(timeRow);
+          
+                  // Controls
+                  LinearLayout controls = new LinearLayout(this);
+                  controls.setGravity(Gravity.CENTER);
+                  controls.setPadding(0, dp(4), 0, dp(4));
+          
+                  Button shuffle = controlButton("🔀", 19);
+                  controls.addView(shuffle, new LinearLayout.LayoutParams(dp(52), dp(65)));
+          
+                  Button previous = controlButton("⏮", 28);
+                  previous.setOnClickListener(v -> previousSong());
+                  controls.addView(previous, new LinearLayout.LayoutParams(dp(62), dp(65)));
+          
+                  fullPlay = controlButton(player != null && player.isPlaying() ? "Ⅱ" : "▶", 25);
+                  fullPlay.setTextColor(WHITE);
+                  fullPlay.setBackground(bg(PURPLE, 60));
+                  fullPlay.setOnClickListener(v -> toggleFullPlay());
+                  LinearLayout.LayoutParams playParams = new LinearLayout.LayoutParams(dp(72), dp(72));
+                  playParams.setMargins(dp(10), 0, dp(10), 0);
+                  controls.addView(fullPlay, playParams);
+          
+                  Button next = controlButton("⏭", 28);
+                  next.setOnClickListener(v -> nextSong());
+                  controls.addView(next, new LinearLayout.LayoutParams(dp(62), dp(65)));
+          
+                  Button repeat = controlButton("🔁", 19);
+                  controls.addView(repeat, new LinearLayout.LayoutParams(dp(52), dp(65)));
+                  fullPlayer.addView(controls);
+          
+                  TextView device = centerText("▣  Playing on this device", 12);
+                  device.setTextColor(GRAY);
+                  fullPlayer.addView(device, new LinearLayout.LayoutParams(-1, dp(35)));
+          
+                  setContentView(fullPlayer);
+                  updateFullPlayerInfo();
+                  startProgressUpdates();
+              }
+          
+              void toggleFullPlay() {
+                  togglePlay();
+                  if (fullPlay != null) {
+                      fullPlay.setText(player != null && player.isPlaying() ? "Ⅱ" : "▶");
+                  }
+              }
+          
+              void updateFullPlayerInfo() {
+                  if (current < 0 || current >= songNames.size()) return;
+                  if (fullTitle != null) fullTitle.setText(songNames.get(current));
+                  if (fullArtist != null) fullArtist.setText(songArtists.get(current));
+                  if (fullArt != null) {
+                      try { fullArt.setImageURI(songArts.get(current)); } catch (Exception ignored) {}
+                  }
+                  if (player != null) {
+                      int d = player.getDuration();
+                      if (durationText != null) durationText.setText(formatTime(d));
+                      if (progressBar != null) progressBar.setProgress(0);
+                  }
+              }
+          
+              String formatTime(int ms) {
+                  int total = Math.max(0, ms / 1000);
+                  int min = total / 60;
+                  int sec = total % 60;
+                  return min + ":" + (sec < 10 ? "0" : "") + sec;
+              }
+          
+              void startProgressUpdates() {
+                  stopProgressUpdates();
+                  progressUpdater = new Runnable() {
+                      @Override public void run() {
+                          if (player != null && progressBar != null) {
+                              int d = player.getDuration();
+                              int p = player.getCurrentPosition();
+                              if (d > 0) {
+                                  progressBar.setProgress((int)(p * 1000f / d));
+                                  if (elapsedText != null) elapsedText.setText(formatTime(p));
+                                  if (durationText != null) durationText.setText(formatTime(d));
+                              }
+                          }
+                          progressHandler.postDelayed(this, 500);
+                      }
+                  };
+                  progressHandler.post(progressUpdater);
+              }
+          
+              void stopProgressUpdates() {
+                  if (progressUpdater != null) {
+                      progressHandler.removeCallbacks(progressUpdater);
+                      progressUpdater = null;
+                  }
+              }
+          
+              void closeFullPlayer() {
+                  stopProgressUpdates();
+                  setContentView(root);
+              }
+          
+              void previousSong() {
+                  if (songUris.isEmpty()) return;
+                  int p = current - 1;
+                  if (p < 0) p = songUris.size() - 1;
+                  playSong(p);
+                  if (fullPlayer != null) {
+                      updateFullPlayerInfo();
+                      if (fullPlay != null) fullPlay.setText("Ⅱ");
+                  }
+              }
+          
+              void playSong(int position) {
+                  if (position < 0 || position >= songUris.size()) return;
+                  releasePlayer();
+                  try {
+                      player = MediaPlayer.create(this, songUris.get(position));
+                      if (player == null) {
+                          Toast.makeText(this, "এই গানটি চালানো যাচ্ছে না", Toast.LENGTH_SHORT).show();
+                          return;
+                      }
+                      current = position;
+                      miniTitle.setText(songNames.get(position));
+                      miniArtist.setText(songArtists.get(position));
+                      try { miniArt.setImageURI(songArts.get(position)); } catch (Exception ignored) {}
+                      miniPlay.setText("Ⅱ");
+                      player.setOnCompletionListener(mp -> nextSong());
+                      player.start();
+                      if (fullPlayer != null) {
+                          updateFullPlayerInfo();
+                          if (fullPlay != null) fullPlay.setText("Ⅱ");
+                      }
+                  } catch (Exception e) {
+                      Toast.makeText(this, "গান চালাতে সমস্যা হয়েছে", Toast.LENGTH_SHORT).show();
+                  }
+              }
+          
+              void togglePlay() {
+                  if (player == null) {
+                      if (!songUris.isEmpty()) playSong(0);
+                      return;
+                  }
+                  if (player.isPlaying()) {
+                      player.pause(); miniPlay.setText("▶");
+                  } else {
+                      player.start(); miniPlay.setText("Ⅱ");
+                  }
+              }
+          
+              void nextSong() {
+                  if (songUris.isEmpty()) return;
+                  int n = current + 1;
+                  if (n >= songUris.size()) n = 0;
+                  playSong(n);
+              }
+          
+              void releasePlayer() {
+                  if (player != null) {
+                      try { player.stop(); } catch (Exception ignored) {}
+                      player.release();
+                      player = null;
+                  }
+              }
+          
+              @Override
+              public void onBackPressed() {
+                  if (fullPlayer != null && fullPlayer == getWindow().getDecorView().findViewById(android.R.id.content).getChildAt(0)) {
+                      fullPlayer = null;
+                      stopProgressUpdates();
+                      setContentView(root);
+                      return;
+                  }
+                  super.onBackPressed();
+              }
+          
+              @Override
+              public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+                  super.onRequestPermissionsResult(requestCode, permissions, results);
+                  if (requestCode == PERMISSION_CODE && results.length > 0
+                          && results[0] == PackageManager.PERMISSION_GRANTED) {
+                      loadSongs();
+                  } else {
+                      Toast.makeText(this, "Music permission প্রয়োজন", Toast.LENGTH_LONG).show();
+                  }
+              }
+          
+              @Override
+              protected void onDestroy() {
+                  stopProgressUpdates();
+                  releasePlayer();
+                  super.onDestroy();
+              }
+          }
+          EOF
+
+      - name: Build APK
+        run: |
+          gradle --no-daemon clean assembleDebug
+          mkdir -p output
+          cp app/build/outputs/apk/debug/app-debug.apk output/Sur.apk
+
+      - name: Upload Sur APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sur-APK
+          path: output/Sur.apk
+          if-no-files-found: error
