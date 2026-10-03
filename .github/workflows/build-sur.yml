@@ -27,6 +27,45 @@ jobs:
       - name: Create Android project
         shell: bash
         run: |
+         mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+          cat > app/src/main/res/drawable/ic_sur_icon.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+
+              <path
+                  android:fillColor="#09004A"
+                  android:pathData="M0,0 L108,0 L108,108 L0,108 Z"/>
+
+              <path
+                  android:fillColor="#5414FF"
+                  android:pathData="M8,0 L100,0 Q108,0 108,8 L108,100 Q108,108 100,108 L8,108 Q0,108 0,100 L0,8 Q0,0 8,0 Z"/>
+
+              <path
+                  android:fillColor="#B400FF"
+                  android:pathData="M54,14 C38,18 29,31 33,43 C36,53 47,57 56,62 C65,67 70,74 65,83 C62,89 53,94 44,92 C57,100 76,93 79,80 C82,67 72,59 60,53 C50,48 43,44 45,37 C47,30 55,25 65,23 C70,22 75,20 77,17 C72,13 63,12 54,14 Z"/>
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M53,30 L59,33 L59,67 C59,74 54,79 47,79 C40,79 36,75 36,70 C36,64 41,60 47,60 C49,60 51,60 53,61 Z"/>
+
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M59,30 L72,37 L72,43 L59,38 Z"/>
+
+              <path
+                  android:fillColor="#00CFFF"
+                  android:pathData="M60,48 C70,52 78,57 79,66 C80,75 75,83 66,88 C72,81 73,74 69,68 C66,63 60,60 55,57 Z"/>
+
+          </vector>
+          EOF
           mkdir -p app/src/main/java/com/sur/music
           mkdir -p app/src/main/res/values
 
