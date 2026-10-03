@@ -369,11 +369,11 @@ jobs:
                   nowTitle = text("কোনো গান চলছে না", 14);
                   nowTitle.setTypeface(Typeface.DEFAULT, Typeface.BLOD);
                   nowArtist = text("সুর Music Player", 11);
-                  nowArtist.setTextColor(GRAY);        names.addView(nowTitle);
-                  names.addView(namestist);
-
+                  nowArtist.setTextColor(GRAY);
+                  names.addView(nowTitle);
+                  names.addView(nowArtist);
                   mini.addView(names,
-                          new LinearLayout.LayoutParams(
+                         new LinearLayout.LayoutParams(
                                   0, 55, 1));
 
                   playPause = button("▶");
