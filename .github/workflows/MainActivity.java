@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.ContentUris;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.database.Cursor;
 import android.graphics.Typeface;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -193,14 +195,17 @@ public class MainActivity extends Activity {
         art.setBackground(bg(Color.rgb(35, 25, 55), 13));
         c.addView(art, new LinearLayout.LayoutParams(-1, dp(105)));
 
-        TextView title = tv(titles.get(i), 14, WHITE);
-        title.setSingleLine(true);
+        TextView title = tv(titles.get(i), 13, WHITE);
+        title.setMaxLines(2);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         title.setTypeface(null, Typeface.BOLD);
-        c.addView(title, new LinearLayout.LayoutParams(-1, dp(32)));
+        title.setGravity(Gravity.CENTER_VERTICAL);
+        c.addView(title, new LinearLayout.LayoutParams(-1, dp(42)));
 
         TextView artist = tv(artists.get(i), 12, GRAY);
         artist.setSingleLine(true);
-        c.addView(artist);
+        artist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        c.addView(artist, new LinearLayout.LayoutParams(-1, dp(22)));
         c.setOnClickListener(v -> play(i));
         return c;
     }
@@ -230,19 +235,25 @@ public class MainActivity extends Activity {
         TextView art = tv("♫", 23, PURPLE);
         art.setGravity(Gravity.CENTER);
         art.setBackground(bg(Color.rgb(35, 28, 50), 10));
-        row.addView(art, new LinearLayout.LayoutParams(dp(55), dp(58)));
+        row.addView(art, new LinearLayout.LayoutParams(dp(55), dp(64)));
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(dp(10), 0, dp(4), 0);
-        TextView a = tv(titles.get(i), 15, WHITE);
-        a.setSingleLine(true);
+        TextView a = tv(titles.get(i), 14, WHITE);
+        a.setMaxLines(2);
+        a.setHorizontallyScrolling(false);
+        a.setEllipsize(android.text.TextUtils.TruncateAt.END);
         a.setTypeface(null, Typeface.BOLD);
+        a.setGravity(Gravity.CENTER_VERTICAL);
+
         TextView b = tv(artists.get(i), 12, GRAY);
         b.setSingleLine(true);
-        info.addView(a, new LinearLayout.LayoutParams(-1, dp(29)));
-        info.addView(b, new LinearLayout.LayoutParams(-1, dp(25)));
-        row.addView(info, new LinearLayout.LayoutParams(0, dp(64), 1));
+        b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+        info.addView(a, new LinearLayout.LayoutParams(-1, dp(44)));
+        info.addView(b, new LinearLayout.LayoutParams(-1, dp(22)));
+        row.addView(info, new LinearLayout.LayoutParams(0, dp(68), 1));
 
         Button fav = new Button(this);
         fav.setText(favorites.contains(uris.get(i).toString()) ? "♥" : "♡");
@@ -259,10 +270,10 @@ public class MainActivity extends Activity {
                 fav.setText("♥");
             }
         });
-        row.addView(fav, new LinearLayout.LayoutParams(dp(55), dp(60)));
+        row.addView(fav, new LinearLayout.LayoutParams(dp(55), dp(64)));
 
         row.setOnClickListener(v -> play(i));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(68));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(78));
         lp.setMargins(0, dp(2), 0, dp(2));
         content.addView(row, lp);
     }
@@ -280,10 +291,13 @@ public class MainActivity extends Activity {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(dp(8), 0, dp(4), 0);
-        miniTitle = tv("Nothing playing", 14, WHITE);
-        miniTitle.setSingleLine(true);
+        miniTitle = tv("Nothing playing", 13, WHITE);
+        miniTitle.setMaxLines(2);
+        miniTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        miniTitle.setHorizontallyScrolling(false);
         miniArtist = tv("Choose a song", 11, GRAY);
         miniArtist.setSingleLine(true);
+        miniArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
         info.addView(miniTitle);
         info.addView(miniArtist);
         m.addView(info, new LinearLayout.LayoutParams(0, dp(60), 1));
@@ -533,12 +547,15 @@ public class MainActivity extends Activity {
         fullTitle = tv("", 23, WHITE);
         fullTitle.setTypeface(null, Typeface.BOLD);
         fullTitle.setGravity(Gravity.CENTER);
-        fullTitle.setSingleLine(true);
-        page.addView(fullTitle, new LinearLayout.LayoutParams(-1, dp(38)));
+        fullTitle.setMaxLines(2);
+        fullTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        page.addView(fullTitle, new LinearLayout.LayoutParams(-1, dp(58)));
 
         fullArtist = tv("", 15, GRAY);
         fullArtist.setGravity(Gravity.CENTER);
-        page.addView(fullArtist, new LinearLayout.LayoutParams(-1, dp(32)));
+        fullArtist.setSingleLine(true);
+        fullArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        page.addView(fullArtist, new LinearLayout.LayoutParams(-1, dp(30)));
 
         seek = new SeekBar(this);
         seek.setMax(1000);
