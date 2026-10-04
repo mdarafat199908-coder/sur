@@ -286,38 +286,60 @@ public class MainActivity extends Activity {
         m.setGravity(Gravity.CENTER_VERTICAL);
         m.setPadding(dp(9), dp(4), dp(8), dp(4));
         m.setBackground(bg(Color.rgb(25, 20, 38), 0));
+        m.setClickable(true);
+        m.setOnClickListener(v -> showFullPlayer());
 
         TextView art = tv("♫", 27, PURPLE);
         art.setGravity(Gravity.CENTER);
+        art.setOnClickListener(v -> showFullPlayer());
         m.addView(art, new LinearLayout.LayoutParams(dp(48), dp(60)));
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(dp(8), 0, dp(4), 0);
+        info.setClickable(true);
+        info.setOnClickListener(v -> showFullPlayer());
+
         miniTitle = tv("Nothing playing", 13, WHITE);
         miniTitle.setMaxLines(2);
         miniTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
         miniTitle.setHorizontallyScrolling(false);
+        miniTitle.setClickable(true);
+        miniTitle.setOnClickListener(v -> showFullPlayer());
+
         miniArtist = tv("Choose a song", 11, GRAY);
         miniArtist.setSingleLine(true);
         miniArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        miniArtist.setClickable(true);
+        miniArtist.setOnClickListener(v -> showFullPlayer());
+
         info.addView(miniTitle);
         info.addView(miniArtist);
         m.addView(info, new LinearLayout.LayoutParams(0, dp(60), 1));
+
+        Button previous = new Button(this);
+        previous.setText("⏮");
+        previous.setTextSize(20);
+        previous.setTextColor(WHITE);
+        previous.setBackgroundColor(Color.TRANSPARENT);
+        previous.setOnClickListener(v -> previous());
+        m.addView(previous, new LinearLayout.LayoutParams(dp(48), dp(60)));
 
         miniPlay = new Button(this);
         updatePlayButtons();
         miniPlay.setTextColor(WHITE);
         miniPlay.setBackgroundColor(Color.TRANSPARENT);
         miniPlay.setOnClickListener(v -> toggle());
-        m.addView(miniPlay, new LinearLayout.LayoutParams(dp(60), dp(60)));
+        m.addView(miniPlay, new LinearLayout.LayoutParams(dp(52), dp(60)));
 
-        Button open = new Button(this);
-        open.setText("⌃");
-        open.setTextColor(PURPLE);
-        open.setBackgroundColor(Color.TRANSPARENT);
-        open.setOnClickListener(v -> showFullPlayer());
-        m.addView(open, new LinearLayout.LayoutParams(dp(50), dp(60)));
+        Button next = new Button(this);
+        next.setText("⏭");
+        next.setTextSize(20);
+        next.setTextColor(WHITE);
+        next.setBackgroundColor(Color.TRANSPARENT);
+        next.setOnClickListener(v -> next());
+        m.addView(next, new LinearLayout.LayoutParams(dp(48), dp(60)));
+
         return m;
     }
 
@@ -535,15 +557,24 @@ public class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER);
         bar.addView(label, new LinearLayout.LayoutParams(0, dp(55), 1));
 
+        page.addView(bar);
+
+        // Large Sleep Timer button, moved below the header.
+        LinearLayout timerRow = new LinearLayout(this);
+        timerRow.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        timerRow.setPadding(0, dp(2), dp(12), dp(2));
+
         Button timer = new Button(this);
         timer.setText("⏱");
-        timer.setTextSize(20);
+        timer.setTextSize(30);
         timer.setTextColor(PURPLE);
         timer.setBackgroundColor(Color.TRANSPARENT);
+        timer.setPadding(0, 0, 0, 0);
+        timer.setMinWidth(0);
+        timer.setMinHeight(0);
         timer.setOnClickListener(v -> showSleepTimer());
-        bar.addView(timer, new LinearLayout.LayoutParams(dp(55), dp(55)));
-
-        page.addView(bar);
+        timerRow.addView(timer, new LinearLayout.LayoutParams(dp(68), dp(62)));
+        page.addView(timerRow, new LinearLayout.LayoutParams(-1, dp(66)));
 
         albumArt = new ImageView(this);
         albumArt.setImageResource(android.R.drawable.ic_media_play);
@@ -551,7 +582,7 @@ public class MainActivity extends Activity {
         albumArt.setScaleType(ImageView.ScaleType.CENTER);
         albumArt.setBackground(bg(Color.rgb(32, 24, 48), 22));
         LinearLayout.LayoutParams artLp = new LinearLayout.LayoutParams(dp(285), dp(285));
-        artLp.setMargins(0, dp(20), 0, dp(25));
+        artLp.setMargins(0, dp(8), 0, dp(25));
         page.addView(albumArt, artLp);
 
         fullTitle = tv("", 23, WHITE);
@@ -734,4 +765,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-                }
+    }
