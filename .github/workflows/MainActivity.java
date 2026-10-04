@@ -1,4 +1,4 @@
-package com.sur.music;
+আমি package com.sur.music;
 
 import android.Manifest;
 import android.app.Activity;
@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     Button miniPlay;
     Button fullPlayPause;
     CountDownTimer sleepTimer;
+    TextView timerRemaining;
     EditText search;
     MediaPlayer player;
     SeekBar seek;
@@ -556,12 +557,11 @@ public class MainActivity extends Activity {
         TextView label = tv("NOW PLAYING", 12, GRAY);
         label.setGravity(Gravity.CENTER);
         bar.addView(label, new LinearLayout.LayoutParams(0, dp(55), 1));
-
         page.addView(bar);
 
-        // Large Sleep Timer button, moved below the header.
         LinearLayout timerRow = new LinearLayout(this);
-        timerRow.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        timerRow.setGravity(Gravity.CENTER);
+        timerRow.setOrientation(LinearLayout.VERTICAL);
         timerRow.setPadding(0, dp(2), dp(12), dp(2));
 
         Button timer = new Button(this);
@@ -573,8 +573,13 @@ public class MainActivity extends Activity {
         timer.setMinWidth(0);
         timer.setMinHeight(0);
         timer.setOnClickListener(v -> showSleepTimer());
-        timerRow.addView(timer, new LinearLayout.LayoutParams(dp(68), dp(62)));
-        page.addView(timerRow, new LinearLayout.LayoutParams(-1, dp(66)));
+        timerRow.addView(timer, new LinearLayout.LayoutParams(dp(68), dp(52)));
+
+        timerRemaining = tv("Timer বন্ধ", 12, GRAY);
+        timerRemaining.setGravity(Gravity.CENTER);
+        timerRow.addView(timerRemaining, new LinearLayout.LayoutParams(-1, dp(24)));
+
+        page.addView(timerRow, new LinearLayout.LayoutParams(-1, dp(78)));
 
         albumArt = new ImageView(this);
         albumArt.setImageResource(android.R.drawable.ic_media_play);
@@ -623,19 +628,34 @@ public class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         Button prev = control("⏮");
-        fullPlayPause = control("▶");
+        fullPlayPause = createRoundPlayButton();
         Button nextB = control("⏭");
-        Button pp = fullPlayPause;
+
         prev.setOnClickListener(v -> previous());
-        pp.setOnClickListener(v -> toggle());
+        fullPlayPause.setOnClickListener(v -> toggle());
         nextB.setOnClickListener(v -> next());
-        controls.addView(prev);
-        controls.addView(pp, new LinearLayout.LayoutParams(dp(90), dp(70)));
-        controls.addView(nextB);
-        page.addView(controls, new LinearLayout.LayoutParams(-1, dp(85)));
+
+        controls.addView(prev, new LinearLayout.LayoutParams(dp(70), dp(70)));
+        controls.addView(fullPlayPause, new LinearLayout.LayoutParams(dp(76), dp(76)));
+        controls.addView(nextB, new LinearLayout.LayoutParams(dp(70), dp(70)));
+        page.addView(controls, new LinearLayout.LayoutParams(-1, dp(88)));
 
         content.addView(page, new LinearLayout.LayoutParams(-1, -2));
         updateFullPlayer();
+    }
+
+    Button createRoundPlayButton() {
+        Button b = new Button(this);
+        b.setText("▶");
+        b.setTextSize(28);
+        b.setTextColor(WHITE);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinWidth(0);
+        b.setMinHeight(0);
+        b.setIncludeFontPadding(false);
+        b.setBackground(bg(PURPLE, 100));
+        return b;
     }
 
     Button control(String s) {
@@ -674,6 +694,7 @@ public class MainActivity extends Activity {
                             sleepTimer.cancel();
                             sleepTimer = null;
                         }
+                        if (timerRemaining != null) timerRemaining.setText("Timer বন্ধ");
                         Toast.makeText(this, "Sleep timer off", Toast.LENGTH_SHORT).show();
                         return;
                     }
@@ -683,10 +704,14 @@ public class MainActivity extends Activity {
                     final int selected = mins[which];
                     sleepTimer = new CountDownTimer(selected * 60L * 1000L, 1000L) {
                         @Override public void onTick(long left) {
-                            // Timer runs in the background while music plays.
+                            if (timerRemaining != null)
+                                timerRemaining.setText("বাকি " + formatTimer(left));
                         }
 
                         @Override public void onFinish() {
+                            if (timerRemaining != null)
+                                timerRemaining.setText("Timer শেষ");
+
                             if (player != null && player.isPlaying()) {
                                 player.pause();
                                 updatePlayButtons();
@@ -697,11 +722,21 @@ public class MainActivity extends Activity {
                         }
                     }.start();
 
+                    if (timerRemaining != null)
+                        timerRemaining.setText("বাকি " + selected + ":00");
+
                     Toast.makeText(this,
                             "Sleep timer: " + selected + " minutes",
                             Toast.LENGTH_SHORT).show();
                 })
                 .show();
+    }
+
+    String formatTimer(long ms) {
+        long totalSec = Math.max(0, ms / 1000);
+        long min = totalSec / 60;
+        long sec = totalSec % 60;
+        return min + ":" + String.format("%02d", sec);
     }
 
     void updateFullPlayer() {
@@ -765,4 +800,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-    }
+            }
