@@ -12,6 +12,7 @@ import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.provider.MediaStore;
 import android.view.Gravity;
@@ -33,6 +34,8 @@ public class MainActivity extends Activity {
     LinearLayout root, content, mini;
     TextView miniTitle, miniArtist;
     Button miniPlay;
+    Button fullPlayPause;
+    CountDownTimer sleepTimer;
     EditText search;
     MediaPlayer player;
     SeekBar seek;
@@ -303,7 +306,7 @@ public class MainActivity extends Activity {
         m.addView(info, new LinearLayout.LayoutParams(0, dp(60), 1));
 
         miniPlay = new Button(this);
-        miniPlay.setText("▶");
+        updatePlayButtons();
         miniPlay.setTextColor(WHITE);
         miniPlay.setBackgroundColor(Color.TRANSPARENT);
         miniPlay.setOnClickListener(v -> toggle());
@@ -469,7 +472,7 @@ public class MainActivity extends Activity {
             player.start();
             miniTitle.setText(titles.get(i));
             miniArtist.setText(artists.get(i));
-            miniPlay.setText("Ⅱ");
+            updatePlayButtons();
 
             player.setOnCompletionListener(mp -> next());
             if (fullPlayer) updateFullPlayer();
@@ -486,11 +489,10 @@ public class MainActivity extends Activity {
         }
         if (player.isPlaying()) {
             player.pause();
-            miniPlay.setText("▶");
         } else {
             player.start();
-            miniPlay.setText("Ⅱ");
         }
+        updatePlayButtons();
     }
 
     void previous() {
@@ -532,7 +534,15 @@ public class MainActivity extends Activity {
         TextView label = tv("NOW PLAYING", 12, GRAY);
         label.setGravity(Gravity.CENTER);
         bar.addView(label, new LinearLayout.LayoutParams(0, dp(55), 1));
-        bar.addView(space(dp(55)));
+
+        Button timer = new Button(this);
+        timer.setText("⏱");
+        timer.setTextSize(20);
+        timer.setTextColor(PURPLE);
+        timer.setBackgroundColor(Color.TRANSPARENT);
+        timer.setOnClickListener(v -> showSleepTimer());
+        bar.addView(timer, new LinearLayout.LayoutParams(dp(55), dp(55)));
+
         page.addView(bar);
 
         albumArt = new ImageView(this);
@@ -582,8 +592,9 @@ public class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
         Button prev = control("⏮");
-        Button pp = control("▶");
+        fullPlayPause = control("▶");
         Button nextB = control("⏭");
+        Button pp = fullPlayPause;
         prev.setOnClickListener(v -> previous());
         pp.setOnClickListener(v -> toggle());
         nextB.setOnClickListener(v -> next());
@@ -606,10 +617,67 @@ public class MainActivity extends Activity {
         return b;
     }
 
+    void updatePlayButtons() {
+        boolean playing = player != null && player.isPlaying();
+        String icon = playing ? "Ⅱ" : "▶";
+        if (miniPlay != null) miniPlay.setText(icon);
+        if (fullPlayPause != null) fullPlayPause.setText(icon);
+    }
+
+    void showSleepTimer() {
+        final String[] choices = {
+                "Off",
+                "15 minutes",
+                "30 minutes",
+                "45 minutes",
+                "60 minutes",
+                "90 minutes"
+        };
+        final int[] mins = {0, 15, 30, 45, 60, 90};
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Sleep Timer")
+                .setItems(choices, (dialog, which) -> {
+                    if (mins[which] == 0) {
+                        if (sleepTimer != null) {
+                            sleepTimer.cancel();
+                            sleepTimer = null;
+                        }
+                        Toast.makeText(this, "Sleep timer off", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    if (sleepTimer != null) sleepTimer.cancel();
+
+                    final int selected = mins[which];
+                    sleepTimer = new CountDownTimer(selected * 60L * 1000L, 1000L) {
+                        @Override public void onTick(long left) {
+                            // Timer runs in the background while music plays.
+                        }
+
+                        @Override public void onFinish() {
+                            if (player != null && player.isPlaying()) {
+                                player.pause();
+                                updatePlayButtons();
+                            }
+                            sleepTimer = null;
+                            Toast.makeText(MainActivity.this,
+                                    "Sleep timer finished", Toast.LENGTH_SHORT).show();
+                        }
+                    }.start();
+
+                    Toast.makeText(this,
+                            "Sleep timer: " + selected + " minutes",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
     void updateFullPlayer() {
         if (current < 0 || fullTitle == null) return;
         fullTitle.setText(titles.get(current));
         fullArtist.setText(artists.get(current));
+        updatePlayButtons();
         if (player != null) {
             int d = player.getDuration();
             timeEnd.setText(format(d));
@@ -662,7 +730,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        if (sleepTimer != null) sleepTimer.cancel();
         if (player != null) player.release();
         super.onDestroy();
     }
-}
+                }
