@@ -117,6 +117,10 @@ jobs:
             exit 1
           fi
 
+          if ! grep -q '^import android.graphics.drawable.GradientDrawable;' app/src/main/java/com/sur/music/MainActivity.java; then
+            sed -i '/^package com\.sur\.music;/a import android.graphics.drawable.GradientDrawable;' app/src/main/java/com/sur/music/MainActivity.java
+          fi
+
           test -f settings.gradle
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
