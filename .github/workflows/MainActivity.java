@@ -344,7 +344,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
 
-        content.setBackgroundColor(BG);
+        content.setBackgroundColor(Color.WHITE);
         content.setPadding(dp(18), dp(8), dp(18), 0);
 
         search = null;
@@ -480,7 +480,7 @@ public class MainActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(4), dp(3), dp(4), dp(3));
         row.setBackground(bg(
-                i == current ? PLAYING_BLUE : Color.rgb(17, 16, 29),
+                i == current ? Color.rgb(220, 235, 255) : Color.rgb(245, 245, 245),
                 12));
 
         TextView art = tv("♫", 23, PURPLE);
@@ -497,7 +497,7 @@ public class MainActivity extends Activity {
         TextView a = tv(
                 titles.get(i),
                 14,
-                i == current ? PLAYING_BLUE_TEXT : WHITE);
+                i == current ? Color.rgb(25, 105, 210) : Color.BLACK);
 
         a.setMaxLines(2);
         a.setHorizontallyScrolling(false);
@@ -1234,10 +1234,12 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(
                         0, dp(60), 1));
 
-        page.addView(
-                actions,
-                new LinearLayout.LayoutParams(
-                        -1, dp(62)));
+        LinearLayout.LayoutParams actionLp =
+                new LinearLayout.LayoutParams(-1, dp(62));
+
+        actionLp.setMargins(0, dp(50), 0, dp(0));
+
+        page.addView(actions, actionLp);
 
         content.addView(
                 page,
@@ -1515,4 +1517,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-}
+            }
