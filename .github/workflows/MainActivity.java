@@ -99,7 +99,21 @@ public class MainActivity extends Activity {
         setupMediaSession();
         createNotificationChannel();
         requestNotificationPermission();
-        requestMusicPermission();
+
+        handleNotificationIntent(getIntent());
+    }
+
+    void handleNotificationIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (ACTION_PLAY_PAUSE.equals(action)) {
+            toggle();
+        } else if (ACTION_PREVIOUS.equals(action)) {
+            previous();
+        } else if (ACTION_NEXT.equals(action)) {
+            next();
+        }
+        if (action != null) intent.setAction(null);
     }
 
     void setupMediaSession() {
@@ -147,6 +161,8 @@ public class MainActivity extends Activity {
                         != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(
                     new String[]{Manifest.permission.POST_NOTIFICATIONS}, 60);
+        } else {
+            requestMusicPermission();
         }
     }
 
@@ -266,17 +282,7 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
 
-        String action = intent.getAction();
-        if (ACTION_PLAY_PAUSE.equals(action)) {
-            toggle();
-        } else if (ACTION_PREVIOUS.equals(action)) {
-            previous();
-        } else if (ACTION_NEXT.equals(action)) {
-            next();
-        }
-        if (intent.getAction() != null) {
-            intent.setAction(null);
-        }
+        handleNotificationIntent(intent);
     }
 
     void requestMusicPermission() {
@@ -987,13 +993,11 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int r, String[] p, int[] g) {
         super.onRequestPermissionsResult(r, p, g);
-        if (r == 50 && g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
+        if (r == 60) {
+            requestMusicPermission();
+        } else if (r == 50 && g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
             loadSongs();
-        } else if (r == 60) {
-            if (g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
-                if (player != null && current >= 0) updateMediaSession();
-            }
-        } else {
+        } else if (r == 50) {
             Toast.makeText(this, "Music permission is required", Toast.LENGTH_LONG).show();
         }
     }
@@ -1010,4 +1014,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-                               }
+            }
