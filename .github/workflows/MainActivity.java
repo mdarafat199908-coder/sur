@@ -1284,6 +1284,20 @@ public class MainActivity extends Activity {
         return b;
     }
 
+
+    void updatePlayButtons() {
+        boolean playing = player != null && player.isPlaying();
+        String icon = playing ? "Ⅱ" : "▶";
+
+        if (miniPlay != null) {
+            miniPlay.setText(icon);
+        }
+
+        if (fullPlayPause != null) {
+            fullPlayPause.setText(icon);
+        }
+    }
+
     void showSleepTimer() {
         final String[] choices = {
                 "Off",
@@ -1501,4 +1515,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-                    }
+}
