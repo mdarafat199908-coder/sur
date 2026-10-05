@@ -62,8 +62,8 @@ jobs:
           "        applicationId 'com.sur.music'" \
           "        minSdk 23" \
           "        targetSdk 35" \
-          "        versionCode 2" \
-          "        versionName '1.1'" \
+          "        versionCode 3" \
+          "        versionName '1.2'" \
           "    }" \
           "}" > app/build.gradle
 
@@ -72,6 +72,7 @@ jobs:
           "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">" \
           "    <uses-permission android:name=\"android.permission.READ_MEDIA_AUDIO\" />" \
           "    <uses-permission android:name=\"android.permission.READ_EXTERNAL_STORAGE\" />" \
+          "    <uses-permission android:name=\"android.permission.POST_NOTIFICATIONS\" />" \
           "    <application" \
           "        android:allowBackup=\"true\"" \
           "        android:label=\"Sur\"" \
@@ -87,6 +88,7 @@ jobs:
           "                <category android:name=\"android.intent.category.LAUNCHER\" />" \
           "            </intent-filter>" \
           "        </activity>" \
+          "        <receiver android:name=\".MainActivity\$NotificationReceiver\" android:exported=\"false\" />" \
           "    </application>" \
           "</manifest>" > app/src/main/AndroidManifest.xml
 
