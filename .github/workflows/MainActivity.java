@@ -174,7 +174,7 @@ public class MainActivity extends Activity {
         content.addView(made);
 
         content.addView(heading("All Songs"));
-        for (int i = 0; i < Math.min(titles.size(), 12); i++) addSongRow(i);
+        for (int i = 0; i < titles.size(); i++) addSongRow(i);
         if (titles.size() == 0) {
             TextView empty = tv("No music found on this device.", 15, GRAY);
             empty.setPadding(0, dp(15), 0, dp(30));
@@ -800,4 +800,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-            }
+    }
