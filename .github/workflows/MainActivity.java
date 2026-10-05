@@ -75,6 +75,48 @@ public class MainActivity extends Activity {
     ArrayList<Long> albumIds = new ArrayList<>();
     Set<String> favorites = new HashSet<>();
 
+    boolean isDarkTheme() {
+        return (getResources().getConfiguration().uiMode
+                & android.content.res.Configuration.UI_MODE_NIGHT_MASK)
+                == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    int pageBackground() {
+        return isDarkTheme() ? BG : Color.WHITE;
+    }
+
+    int primaryText() {
+        return isDarkTheme() ? Color.WHITE : Color.rgb(25, 25, 25);
+    }
+
+    int secondaryText() {
+        return isDarkTheme() ? GRAY : Color.rgb(120, 120, 120);
+    }
+
+    int listCardBackground() {
+        return isDarkTheme() ? Color.rgb(17, 16, 29) : Color.rgb(247, 247, 249);
+    }
+
+    int listArtBackground() {
+        return isDarkTheme() ? Color.rgb(35, 28, 50) : Color.rgb(240, 232, 255);
+    }
+
+    void applyListTheme() {
+        int bgColor = pageBackground();
+        getWindow().setStatusBarColor(bgColor);
+        getWindow().setNavigationBarColor(bgColor);
+
+        if (Build.VERSION.SDK_INT >= 23) {
+            int flags = 0;
+            if (!isDarkTheme()) {
+                flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= 26)
+                    flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+            }
+            getWindow().getDecorView().setSystemUiVisibility(flags);
+        }
+    }
+
     int dp(float v) {
         return (int)(v * getResources().getDisplayMetrics().density + .5f);
     }
@@ -98,8 +140,7 @@ public class MainActivity extends Activity {
     @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        applyListTheme();
         buildHome();
         setupMediaSession();
         createNotificationChannel();
@@ -337,89 +378,227 @@ public class MainActivity extends Activity {
         fullPlayer = false;
 
         if (mini != null) mini.setVisibility(View.VISIBLE);
+        // Home screen follows the reference design: no bottom navigation bar.
         if (root != null && root.getChildCount() >= 3) {
-            root.getChildAt(2).setVisibility(View.VISIBLE);
+            root.getChildAt(2).setVisibility(View.GONE);
         }
 
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-
-        content.setBackgroundColor(Color.WHITE);
-        content.setPadding(dp(18), dp(8), dp(18), 0);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
+        content.setPadding(dp(18), dp(8), dp(18), dp(8));
 
         search = null;
         content.removeAllViews();
 
+        // Top bar: Search + menu
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView logo = tv("Sur", 31, WHITE);
-        logo.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-
-        TextView note = tv("♫", 30, PURPLE);
-
-        top.addView(note, new LinearLayout.LayoutParams(dp(38), dp(55)));
-        top.addView(logo, new LinearLayout.LayoutParams(0, dp(55), 1));
+        Space left = new Space(this);
+        top.addView(left, new LinearLayout.LayoutParams(0, dp(52), 1));
 
         Button searchBtn = new Button(this);
         searchBtn.setText("⌕");
-        searchBtn.setTextSize(25);
-        searchBtn.setTextColor(WHITE);
+        searchBtn.setTextSize(28);
+        searchBtn.setTextColor(isDarkTheme() ? Color.WHITE : Color.rgb(195, 65, 90));
         searchBtn.setBackgroundColor(Color.TRANSPARENT);
+        searchBtn.setPadding(0, 0, 0, 0);
         searchBtn.setOnClickListener(v -> showSearch());
+        top.addView(searchBtn, new LinearLayout.LayoutParams(dp(52), dp(52)));
 
-        top.addView(searchBtn, new LinearLayout.LayoutParams(dp(55), dp(55)));
-        content.addView(top);
+        Button menuBtn = new Button(this);
+        menuBtn.setText("⋮");
+        menuBtn.setTextSize(27);
+        menuBtn.setTextColor(isDarkTheme() ? Color.WHITE : Color.rgb(195, 65, 90));
+        menuBtn.setBackgroundColor(Color.TRANSPARENT);
+        menuBtn.setPadding(0, 0, 0, 0);
+        menuBtn.setOnClickListener(v -> showHomeMenu(menuBtn));
+        top.addView(menuBtn, new LinearLayout.LayoutParams(dp(42), dp(52)));
 
-        TextView hello = tv("Your music, your way", 14, GRAY);
-        content.addView(hello);
+        content.addView(top, new LinearLayout.LayoutParams(-1, dp(62)));
 
-        content.addView(heading("Recently Played"));
+        // Tabs: Songs / Artists / Albums / Playlists
+        LinearLayout tabs = new LinearLayout(this);
+        tabs.setGravity(Gravity.CENTER_VERTICAL);
 
-        HorizontalScrollView recentScroll = new HorizontalScrollView(this);
-        LinearLayout recent = new LinearLayout(this);
-        recent.setOrientation(LinearLayout.HORIZONTAL);
+        TextView songs = homeTab("Songs", true);
+        TextView artistsTab = homeTab("Artists", false);
+        TextView albumsTab = homeTab("Albums", false);
+        TextView playlistsTab = homeTab("Playlists", false);
 
-        for (int i = Math.max(0, titles.size() - 6); i < titles.size(); i++)
-            recent.addView(card(i, false),
-                    new LinearLayout.LayoutParams(dp(155), dp(185)));
+        songs.setOnClickListener(v -> showHome());
+        artistsTab.setOnClickListener(v -> showArtistsPage());
+        albumsTab.setOnClickListener(v -> showAlbumsPage());
+        playlistsTab.setOnClickListener(v -> showPlaylistsPage());
 
-        if (titles.size() == 0) {
-            TextView empty = tv(
-                    "Your recently played songs will appear here",
-                    14, GRAY);
-            recent.addView(empty,
-                    new LinearLayout.LayoutParams(dp(280), dp(100)));
-        }
+        tabs.addView(songs, new LinearLayout.LayoutParams(0, dp(58), 1));
+        tabs.addView(artistsTab, new LinearLayout.LayoutParams(0, dp(58), 1));
+        tabs.addView(albumsTab, new LinearLayout.LayoutParams(0, dp(58), 1));
+        tabs.addView(playlistsTab, new LinearLayout.LayoutParams(0, dp(58), 1));
+        content.addView(tabs);
 
-        recentScroll.addView(recent);
-        content.addView(recentScroll,
-                new LinearLayout.LayoutParams(-1, dp(195)));
+        // Selected-tab underline
+        View underline = new View(this);
+        underline.setBackgroundColor(isDarkTheme() ? PURPLE : Color.rgb(195, 65, 90));
+        LinearLayout.LayoutParams ulp = new LinearLayout.LayoutParams(dp(70), dp(2));
+        ulp.setMargins(dp(1), 0, 0, dp(10));
+        content.addView(underline, ulp);
 
-        content.addView(heading("Made for You"));
-
-        LinearLayout made = new LinearLayout(this);
-        made.setOrientation(LinearLayout.HORIZONTAL);
-
-        made.addView(tile("Daily Mix", "♫  Your favorites", PURPLE),
-                new LinearLayout.LayoutParams(0, dp(95), 1));
-
-        made.addView(space(dp(8)));
-
-        made.addView(tile("Chill Mix", "♪  Relax & listen", PINK),
-                new LinearLayout.LayoutParams(0, dp(95), 1));
-
-        content.addView(made);
-
-        content.addView(heading("All Songs"));
-
-        for (int i = 0; i < titles.size(); i++) addSongRow(i);
+        // Songs list, similar to the reference music player.
+        for (int i = 0; i < titles.size(); i++) addHomeSongRow(i);
 
         if (titles.size() == 0) {
-            TextView empty = tv("No music found on this device.", 15, GRAY);
-            empty.setPadding(0, dp(15), 0, dp(30));
+            TextView empty = tv("No music found on this device.", 15, secondaryText());
+            empty.setPadding(dp(2), dp(25), 0, dp(30));
             content.addView(empty);
         }
+    }
+
+    TextView homeTab(String text, boolean selected) {
+        TextView t = tv(text, 16,
+                selected
+                        ? (isDarkTheme() ? PURPLE : Color.rgb(195, 65, 90))
+                        : primaryText());
+        t.setGravity(Gravity.CENTER);
+        t.setTypeface(Typeface.DEFAULT, selected ? Typeface.BOLD : Typeface.NORMAL);
+        return t;
+    }
+
+    void addHomeSongRow(final int i) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(0, dp(7), 0, dp(7));
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackgroundColor(Color.TRANSPARENT);
+        row.setOnClickListener(v -> play(i));
+
+        LinearLayout line = new LinearLayout(this);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout info = new LinearLayout(this);
+        info.setOrientation(LinearLayout.VERTICAL);
+        info.setPadding(0, 0, dp(6), 0);
+
+        TextView title = tv(titles.get(i), 16, primaryText());
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setSingleLine(true);
+        title.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+        TextView meta = tv(
+                artists.get(i) + "–Unknown album",
+                12,
+                secondaryText());
+        meta.setSingleLine(true);
+        meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
+
+        info.addView(title, new LinearLayout.LayoutParams(-1, dp(31)));
+        info.addView(meta, new LinearLayout.LayoutParams(-1, dp(23)));
+
+        line.addView(info, new LinearLayout.LayoutParams(0, dp(58), 1));
+
+        Button more = new Button(this);
+        more.setText("⋮");
+        more.setTextSize(22);
+        more.setTextColor(isDarkTheme() ? Color.LTGRAY : Color.rgb(205, 205, 205));
+        more.setBackgroundColor(Color.TRANSPARENT);
+        more.setPadding(0, 0, 0, 0);
+        more.setOnClickListener(v -> showSongMenu(i));
+        line.addView(more, new LinearLayout.LayoutParams(dp(40), dp(58)));
+
+        row.addView(line, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        View divider = new View(this);
+        divider.setBackgroundColor(isDarkTheme() ? Color.rgb(45, 43, 55) : Color.rgb(245, 245, 245));
+        row.addView(divider, new LinearLayout.LayoutParams(-1, dp(1)));
+
+        content.addView(row, new LinearLayout.LayoutParams(-1, dp(66)));
+    }
+
+    void showSongMenu(final int i) {
+        final String key = uris.get(i).toString();
+        String favoriteText = favorites.contains(key) ? "Remove from Favorites" : "Add to Favorites";
+        new android.app.AlertDialog.Builder(this)
+                .setItems(new String[]{"Play", favoriteText}, (dialog, which) -> {
+                    if (which == 0) {
+                        play(i);
+                    } else {
+                        if (favorites.contains(key)) favorites.remove(key);
+                        else favorites.add(key);
+                        showHome();
+                    }
+                }).show();
+    }
+
+    void showHomeMenu(View anchor) {
+        final String[] items = {"Search", "Library", "Favorites"};
+        new android.app.AlertDialog.Builder(this)
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) showSearch();
+                    else if (which == 1) showLibrary();
+                    else showFavorites();
+                }).show();
+    }
+
+    void showArtistsPage() {
+        fullPlayer = false;
+        if (mini != null) mini.setVisibility(View.VISIBLE);
+        if (root != null && root.getChildCount() >= 3) root.getChildAt(2).setVisibility(View.GONE);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
+        content.setPadding(dp(18), dp(8), dp(18), dp(8));
+        content.removeAllViews();
+
+        TextView h = tv("Artists", 25, primaryText());
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        content.addView(h, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        for (String artist : artists) {
+            if (artist == null || seen.contains(artist)) continue;
+            seen.add(artist);
+            TextView a = tv(artist, 17, primaryText());
+            a.setPadding(dp(8), 0, 0, 0);
+            content.addView(a, new LinearLayout.LayoutParams(-1, dp(55)));
+        }
+    }
+
+    void showAlbumsPage() {
+        fullPlayer = false;
+        if (mini != null) mini.setVisibility(View.VISIBLE);
+        if (root != null && root.getChildCount() >= 3) root.getChildAt(2).setVisibility(View.GONE);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
+        content.setPadding(dp(18), dp(8), dp(18), dp(8));
+        content.removeAllViews();
+
+        TextView h = tv("Albums", 25, primaryText());
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        content.addView(h, new LinearLayout.LayoutParams(-1, dp(58)));
+        TextView e = tv("Album information is not available for some songs.", 14, secondaryText());
+        content.addView(e, new LinearLayout.LayoutParams(-1, dp(45)));
+
+        for (int i = 0; i < titles.size(); i++) {
+            addHomeSongRow(i);
+        }
+    }
+
+    void showPlaylistsPage() {
+        fullPlayer = false;
+        if (mini != null) mini.setVisibility(View.VISIBLE);
+        if (root != null && root.getChildCount() >= 3) root.getChildAt(2).setVisibility(View.GONE);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
+        content.setPadding(dp(18), dp(8), dp(18), dp(8));
+        content.removeAllViews();
+
+        TextView h = tv("Playlists", 25, primaryText());
+        h.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        content.addView(h, new LinearLayout.LayoutParams(-1, dp(58)));
+
+        TextView f = tv("♥  Favorites", 17, primaryText());
+        f.setPadding(dp(8), 0, 0, 0);
+        f.setOnClickListener(v -> showFavorites());
+        content.addView(f, new LinearLayout.LayoutParams(-1, dp(58)));
     }
 
     View space(int w) {
@@ -432,14 +611,14 @@ public class MainActivity extends Activity {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
         c.setPadding(dp(8), dp(8), dp(8), dp(8));
-        c.setBackground(bg(CARD, 16));
+        c.setBackground(bg(isDarkTheme() ? CARD : Color.rgb(247, 247, 249), 16));
 
         TextView art = tv("♫", large ? 45 : 40, PURPLE);
         art.setGravity(Gravity.CENTER);
-        art.setBackground(bg(Color.rgb(35, 25, 55), 13));
+        art.setBackground(bg(isDarkTheme() ? Color.rgb(35, 25, 55) : Color.rgb(240, 232, 255), 13));
         c.addView(art, new LinearLayout.LayoutParams(-1, dp(105)));
 
-        TextView title = tv(titles.get(i), 13, WHITE);
+        TextView title = tv(titles.get(i), 13, primaryText());
         title.setMaxLines(2);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
         title.setTypeface(null, Typeface.BOLD);
@@ -459,9 +638,9 @@ public class MainActivity extends Activity {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
         t.setPadding(dp(12), dp(9), dp(8), dp(8));
-        t.setBackground(bg(Color.rgb(27, 23, 43), 15));
+        t.setBackground(bg(isDarkTheme() ? Color.rgb(27, 23, 43) : Color.rgb(247, 247, 249), 15));
 
-        TextView a = tv(title, 16, WHITE);
+        TextView a = tv(title, 16, primaryText());
         a.setTypeface(null, Typeface.BOLD);
 
         TextView b = tv(sub, 12, GRAY);
@@ -480,12 +659,14 @@ public class MainActivity extends Activity {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(4), dp(3), dp(4), dp(3));
         row.setBackground(bg(
-                i == current ? Color.rgb(220, 235, 255) : Color.rgb(245, 245, 245),
+                isDarkTheme()
+                        ? (i == current ? PLAYING_BLUE : Color.rgb(17, 16, 29))
+                        : (i == current ? Color.rgb(238, 232, 255) : Color.rgb(247, 247, 249)),
                 12));
 
-        TextView art = tv("♫", 23, PURPLE);
+        TextView art = tv("♫", 23, isDarkTheme() ? PURPLE : Color.rgb(155, 93, 229));
         art.setGravity(Gravity.CENTER);
-        art.setBackground(bg(Color.rgb(35, 28, 50), 10));
+        art.setBackground(bg(listArtBackground(), 10));
 
         row.addView(art,
                 new LinearLayout.LayoutParams(dp(55), dp(64)));
@@ -497,7 +678,9 @@ public class MainActivity extends Activity {
         TextView a = tv(
                 titles.get(i),
                 14,
-                i == current ? Color.rgb(25, 105, 210) : Color.BLACK);
+                i == current
+                        ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210))
+                        : primaryText());
 
         a.setMaxLines(2);
         a.setHorizontallyScrolling(false);
@@ -508,7 +691,9 @@ public class MainActivity extends Activity {
         TextView b = tv(
                 artists.get(i),
                 12,
-                i == current ? PLAYING_BLUE_TEXT : GRAY);
+                i == current
+                        ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210))
+                        : secondaryText());
 
         b.setSingleLine(true);
         b.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -525,7 +710,7 @@ public class MainActivity extends Activity {
                 favorites.contains(uris.get(i).toString())
                         ? "♥" : "♡");
 
-        fav.setTextColor(PINK);
+        fav.setTextColor(Color.rgb(239, 51, 78));
         fav.setTextSize(22);
         fav.setBackgroundColor(Color.TRANSPARENT);
 
@@ -568,71 +753,50 @@ public class MainActivity extends Activity {
     LinearLayout createMiniPlayer() {
         LinearLayout m = new LinearLayout(this);
         m.setGravity(Gravity.CENTER_VERTICAL);
-        m.setPadding(dp(9), dp(4), dp(8), dp(4));
-        m.setBackground(bg(Color.rgb(25, 20, 38), 0));
+        m.setPadding(dp(9), dp(5), dp(8), dp(5));
+        m.setBackgroundColor(isDarkTheme() ? Color.rgb(20, 18, 30) : Color.WHITE);
         m.setClickable(true);
         m.setOnClickListener(v -> showFullPlayer());
 
-        TextView art = tv("♫", 27, PURPLE);
+        TextView art = tv("♫", 28, isDarkTheme() ? PURPLE : Color.WHITE);
         art.setGravity(Gravity.CENTER);
+        art.setBackground(bg(isDarkTheme() ? Color.rgb(35, 28, 50) : Color.rgb(232, 232, 232), 12));
         art.setOnClickListener(v -> showFullPlayer());
-
-        m.addView(art,
-                new LinearLayout.LayoutParams(dp(48), dp(60)));
+        m.addView(art, new LinearLayout.LayoutParams(dp(76), dp(60)));
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        info.setPadding(dp(8), 0, dp(4), 0);
-        info.setClickable(true);
-        info.setOnClickListener(v -> showFullPlayer());
+        info.setPadding(dp(10), 0, dp(4), 0);
+        info.setGravity(Gravity.CENTER_VERTICAL);
 
-        miniTitle = tv("Nothing playing", 13, WHITE);
-        miniTitle.setMaxLines(2);
+        miniTitle = tv("Nothing playing", 14, primaryText());
+        miniTitle.setSingleLine(true);
         miniTitle.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        miniTitle.setHorizontallyScrolling(false);
-        miniTitle.setClickable(true);
-        miniTitle.setOnClickListener(v -> showFullPlayer());
-
-        miniArtist = tv("Choose a song", 11, GRAY);
+        miniArtist = tv("Unknown artist", 11, secondaryText());
         miniArtist.setSingleLine(true);
         miniArtist.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        miniArtist.setClickable(true);
-        miniArtist.setOnClickListener(v -> showFullPlayer());
-
-        info.addView(miniTitle);
-        info.addView(miniArtist);
-
-        m.addView(info,
-                new LinearLayout.LayoutParams(0, dp(60), 1));
-
-        Button previous = new Button(this);
-        previous.setText("⏮");
-        previous.setTextSize(20);
-        previous.setTextColor(WHITE);
-        previous.setBackgroundColor(Color.TRANSPARENT);
-        previous.setOnClickListener(v -> previous());
-
-        m.addView(previous,
-                new LinearLayout.LayoutParams(dp(48), dp(60)));
+        info.addView(miniTitle, new LinearLayout.LayoutParams(-1, dp(28)));
+        info.addView(miniArtist, new LinearLayout.LayoutParams(-1, dp(22)));
+        info.setOnClickListener(v -> showFullPlayer());
+        m.addView(info, new LinearLayout.LayoutParams(0, dp(60), 1));
 
         miniPlay = new Button(this);
-        updatePlayButtons();
-        miniPlay.setTextColor(WHITE);
+        miniPlay.setText("▶");
+        miniPlay.setTextSize(22);
+        miniPlay.setTextColor(primaryText());
         miniPlay.setBackgroundColor(Color.TRANSPARENT);
+        miniPlay.setPadding(0, 0, 0, 0);
         miniPlay.setOnClickListener(v -> toggle());
+        m.addView(miniPlay, new LinearLayout.LayoutParams(dp(55), dp(60)));
 
-        m.addView(miniPlay,
-                new LinearLayout.LayoutParams(dp(52), dp(60)));
-
-        Button next = new Button(this);
-        next.setText("⏭");
-        next.setTextSize(20);
-        next.setTextColor(WHITE);
-        next.setBackgroundColor(Color.TRANSPARENT);
-        next.setOnClickListener(v -> next());
-
-        m.addView(next,
-                new LinearLayout.LayoutParams(dp(48), dp(60)));
+        Button queue = new Button(this);
+        queue.setText("☷");
+        queue.setTextSize(25);
+        queue.setTextColor(primaryText());
+        queue.setBackgroundColor(Color.TRANSPARENT);
+        queue.setPadding(0, 0, 0, 0);
+        queue.setOnClickListener(v -> showPlaylistsPage());
+        m.addView(queue, new LinearLayout.LayoutParams(dp(55), dp(60)));
 
         return m;
     }
@@ -640,7 +804,7 @@ public class MainActivity extends Activity {
     LinearLayout createBottomNav() {
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER);
-        nav.setBackgroundColor(Color.rgb(13, 12, 23));
+        nav.setBackgroundColor(isDarkTheme() ? Color.rgb(13, 12, 23) : Color.WHITE);
 
         Button home = navButton("⌂\nHome");
         Button searchB = navButton("⌕\nSearch");
@@ -672,12 +836,13 @@ public class MainActivity extends Activity {
             root.getChildAt(2).setVisibility(View.VISIBLE);
 
         fullPlayer = false;
-        content.setBackgroundColor(BG);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
         content.setPadding(dp(18), dp(8), dp(18), 0);
 
         content.removeAllViews();
 
-        TextView h = tv("Search", 27, WHITE);
+        TextView h = tv("Search", 27, primaryText());
         h.setTypeface(null, Typeface.BOLD);
 
         content.addView(h,
@@ -686,10 +851,10 @@ public class MainActivity extends Activity {
         search = new EditText(this);
         search.setHint("Search songs, artists...");
         search.setHintTextColor(GRAY);
-        search.setTextColor(WHITE);
+        search.setTextColor(primaryText());
         search.setSingleLine(true);
         search.setPadding(dp(14), 0, dp(14), 0);
-        search.setBackground(bg(CARD, 18));
+        search.setBackground(bg(isDarkTheme() ? CARD : Color.rgb(247, 247, 249), 18));
 
         content.addView(search,
                 new LinearLayout.LayoutParams(-1, dp(55)));
@@ -735,13 +900,14 @@ public class MainActivity extends Activity {
             root.getChildAt(2).setVisibility(View.VISIBLE);
 
         fullPlayer = false;
-        content.setBackgroundColor(BG);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
         content.setPadding(dp(18), dp(8), dp(18), 0);
 
         search = null;
         content.removeAllViews();
 
-        TextView h = tv("Your Library", 27, WHITE);
+        TextView h = tv("Your Library", 27, primaryText());
         h.setTypeface(null, Typeface.BOLD);
 
         content.addView(h,
@@ -749,9 +915,9 @@ public class MainActivity extends Activity {
 
         Button all = new Button(this);
         all.setText("♫  All Songs");
-        all.setTextColor(WHITE);
+        all.setTextColor(primaryText());
         all.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        all.setBackground(bg(CARD, 14));
+        all.setBackground(bg(listCardBackground(), 14));
         all.setOnClickListener(v -> showHome());
 
         content.addView(all,
@@ -759,9 +925,9 @@ public class MainActivity extends Activity {
 
         Button fav = new Button(this);
         fav.setText("♥  Favorites");
-        fav.setTextColor(WHITE);
+        fav.setTextColor(primaryText());
         fav.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
-        fav.setBackground(bg(CARD, 14));
+        fav.setBackground(bg(listCardBackground(), 14));
         fav.setOnClickListener(v -> showFavorites());
 
         LinearLayout.LayoutParams lp =
@@ -777,13 +943,14 @@ public class MainActivity extends Activity {
             root.getChildAt(2).setVisibility(View.VISIBLE);
 
         fullPlayer = false;
-        content.setBackgroundColor(BG);
+        applyListTheme();
+        content.setBackgroundColor(pageBackground());
         content.setPadding(dp(18), dp(8), dp(18), 0);
 
         search = null;
         content.removeAllViews();
 
-        TextView h = tv("Favorites", 27, WHITE);
+        TextView h = tv("Favorites", 27, primaryText());
         h.setTypeface(null, Typeface.BOLD);
 
         content.addView(h,
@@ -1002,6 +1169,8 @@ public class MainActivity extends Activity {
         topMore.setTextSize(25);
         topMore.setTextColor(Color.BLACK);
         topMore.setBackgroundColor(Color.TRANSPARENT);
+        topMore.setContentDescription("Sleep Timer");
+        topMore.setOnClickListener(v -> showSleepTimer());
 
         top.addView(
                 topMore,
@@ -1200,7 +1369,13 @@ public class MainActivity extends Activity {
                 favorites.contains(uris.get(current).toString())
                         ? "♥" : "♡");
         Button repeat = bottomAction("↻");
-        Button more = bottomAction("•••");
+        Button more = bottomAction("⏰");
+
+        // Sleep Timer button
+        more.setContentDescription("Sleep Timer");
+        more.setOnClickListener(v -> {
+            showSleepTimer();
+        });
 
         favorite.setOnClickListener(v -> {
             String key = uris.get(current).toString();
@@ -1234,16 +1409,29 @@ public class MainActivity extends Activity {
                 new LinearLayout.LayoutParams(
                         0, dp(60), 1));
 
+        // Anchor the bottom action row near the bottom of the Now Playing
+        // screen. The previous weight spacer could not work correctly
+        // because this page is inside a ScrollView.
+        int playerHeight = root != null ? root.getHeight() : dp(650);
+        if (playerHeight > dp(80)) {
+            page.setMinimumHeight(playerHeight);
+        }
+
+        Space actionSpacer = new Space(this);
+        page.addView(
+                actionSpacer,
+                new LinearLayout.LayoutParams(
+                        -1, 0, 1));
+
         LinearLayout.LayoutParams actionLp =
                 new LinearLayout.LayoutParams(-1, dp(62));
-
-        actionLp.setMargins(0, dp(50), 0, dp(0));
+        actionLp.setMargins(0, 0, 0, dp(38));
 
         page.addView(actions, actionLp);
 
         content.addView(
                 page,
-                new LinearLayout.LayoutParams(-1, -2));
+                new LinearLayout.LayoutParams(-1, -1));
 
         updateFullPlayer();
     }
@@ -1312,76 +1500,80 @@ public class MainActivity extends Activity {
 
         final int[] mins = {0, 15, 30, 45, 60, 90};
 
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("Sleep Timer")
-                .setItems(choices, (dialog, which) -> {
+        android.app.AlertDialog dialog =
+                new android.app.AlertDialog.Builder(this)
+                        .setTitle("Sleep Timer")
+                        .setSingleChoiceItems(choices, -1,
+                                (d, which) -> {
+                                    setSleepTimer(mins[which]);
+                                    d.dismiss();
+                                })
+                        .setNegativeButton("Cancel", null)
+                        .create();
 
-                    if (mins[which] == 0) {
+        dialog.show();
+    }
 
-                        if (sleepTimer != null) {
-                            sleepTimer.cancel();
-                            sleepTimer = null;
-                        }
+    void setSleepTimer(int minutes) {
+        if (minutes == 0) {
+            if (sleepTimer != null) {
+                sleepTimer.cancel();
+                sleepTimer = null;
+            }
 
-                        if (timerRemaining != null)
-                            timerRemaining.setText("Timer বন্ধ");
+            if (timerRemaining != null)
+                timerRemaining.setText("Timer বন্ধ");
 
-                        Toast.makeText(
-                                this,
-                                "Sleep timer off",
-                                Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    "Sleep timer off",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-                        return;
-                    }
+        if (sleepTimer != null)
+            sleepTimer.cancel();
 
-                    if (sleepTimer != null)
-                        sleepTimer.cancel();
+        final int selected = minutes;
 
-                    final int selected = mins[which];
+        sleepTimer = new CountDownTimer(
+                selected * 60L * 1000L,
+                1000L) {
 
-                    sleepTimer = new CountDownTimer(
-                            selected * 60L * 1000L,
-                            1000L) {
+            @Override
+            public void onTick(long left) {
+                if (timerRemaining != null)
+                    timerRemaining.setText(
+                            "বাকি " + formatTimer(left));
+            }
 
-                        @Override
-                        public void onTick(long left) {
-                            if (timerRemaining != null)
-                                timerRemaining.setText(
-                                        "বাকি " + formatTimer(left));
-                        }
+            @Override
+            public void onFinish() {
+                if (timerRemaining != null)
+                    timerRemaining.setText("Timer শেষ");
 
-                        @Override
-                        public void onFinish() {
-                            if (timerRemaining != null)
-                                timerRemaining.setText("Timer শেষ");
+                if (player != null && player.isPlaying()) {
+                    player.pause();
+                    updatePlayButtons();
+                    updateMediaSession();
+                }
 
-                            if (player != null &&
-                                    player.isPlaying()) {
+                sleepTimer = null;
 
-                                player.pause();
-                                updatePlayButtons();
-                                updateMediaSession();
-                            }
+                Toast.makeText(
+                        MainActivity.this,
+                        "Sleep timer finished",
+                        Toast.LENGTH_SHORT).show();
+            }
+        }.start();
 
-                            sleepTimer = null;
+        if (timerRemaining != null)
+            timerRemaining.setText("বাকি " + selected + ":00");
 
-                            Toast.makeText(
-                                    MainActivity.this,
-                                    "Sleep timer finished",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }.start();
-
-                    if (timerRemaining != null)
-                        timerRemaining.setText(
-                                "বাকি " + selected + ":00");
-
-                    Toast.makeText(
-                            this,
-                            "Sleep timer: " + selected + " minutes",
-                            Toast.LENGTH_SHORT).show();
-                })
-                .show();
+        Toast.makeText(
+                this,
+                "Sleep timer: " + selected + " minutes",
+                Toast.LENGTH_SHORT).show();
     }
 
     String formatTimer(long ms) {
