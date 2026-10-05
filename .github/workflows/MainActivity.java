@@ -40,6 +40,8 @@ public class MainActivity extends Activity {
     final int PINK = Color.rgb(255, 105, 180);
     final int WHITE = Color.WHITE;
     final int GRAY = Color.rgb(170, 165, 180);
+    final int PLAYING_BLUE = Color.rgb(25, 105, 210);
+    final int PLAYING_BLUE_TEXT = Color.rgb(110, 190, 255);
 
     LinearLayout root, content, mini;
     TextView miniTitle, miniArtist;
@@ -331,6 +333,7 @@ public class MainActivity extends Activity {
 
     void showHome() {
         fullPlayer = false;
+        search = null;
         content.removeAllViews();
 
         LinearLayout top = new LinearLayout(this);
@@ -437,7 +440,7 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(4), dp(3), dp(4), dp(3));
-        row.setBackground(bg(Color.rgb(17, 16, 29), 12));
+        row.setBackground(bg(i == current ? PLAYING_BLUE : Color.rgb(17, 16, 29), 12));
 
         TextView art = tv("♫", 23, PURPLE);
         art.setGravity(Gravity.CENTER);
@@ -447,14 +450,14 @@ public class MainActivity extends Activity {
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(dp(10), 0, dp(4), 0);
-        TextView a = tv(titles.get(i), 14, WHITE);
+        TextView a = tv(titles.get(i), 14, i == current ? PLAYING_BLUE_TEXT : WHITE);
         a.setMaxLines(2);
         a.setHorizontallyScrolling(false);
         a.setEllipsize(android.text.TextUtils.TruncateAt.END);
         a.setTypeface(null, Typeface.BOLD);
         a.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView b = tv(artists.get(i), 12, GRAY);
+        TextView b = tv(artists.get(i), 12, i == current ? PLAYING_BLUE_TEXT : GRAY);
         b.setSingleLine(true);
         b.setEllipsize(android.text.TextUtils.TruncateAt.END);
 
@@ -483,6 +486,17 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(78));
         lp.setMargins(0, dp(2), 0, dp(2));
         content.addView(row, lp);
+    }
+
+    void refreshCurrentSongHighlight() {
+        if (fullPlayer || content == null) return;
+        // Re-render the current page so the blue highlight follows the active song.
+        // Search and Favorites pages are also refreshed without changing their data.
+        if (search != null && search.getParent() == content) {
+            filter(search.getText().toString());
+            return;
+        }
+        showHome();
     }
 
     LinearLayout createMiniPlayer() {
@@ -611,6 +625,7 @@ public class MainActivity extends Activity {
     }
 
     void showLibrary() {
+        search = null;
         content.removeAllViews();
         TextView h = tv("Your Library", 27, WHITE);
         h.setTypeface(null, Typeface.BOLD);
@@ -636,6 +651,7 @@ public class MainActivity extends Activity {
     }
 
     void showFavorites() {
+        search = null;
         content.removeAllViews();
         TextView h = tv("Favorites", 27, WHITE);
         h.setTypeface(null, Typeface.BOLD);
@@ -700,6 +716,7 @@ public class MainActivity extends Activity {
             miniArtist.setText(artists.get(i));
             updatePlayButtons();
             updateMediaSession();
+            refreshCurrentSongHighlight();
 
             player.setOnCompletionListener(mp -> next());
             if (fullPlayer) updateFullPlayer();
@@ -1014,4 +1031,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-            }
+                }
