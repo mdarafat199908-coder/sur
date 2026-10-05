@@ -7,9 +7,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.media.MediaMetadata;
 import android.media.session.MediaSession;
-import android.os.Build;
+import android.media.session.PlaybackState;
 import android.content.ContentUris;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -18,6 +20,7 @@ import android.database.Cursor;
 import android.graphics.Typeface;
 import android.media.MediaPlayer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.os.Handler;
@@ -46,12 +49,6 @@ public class MainActivity extends Activity {
     TextView timerRemaining;
     EditText search;
     MediaPlayer player;
-    MediaSession mediaSession;
-    NotificationManager notificationManager;
-    static final String CHANNEL_ID = "sur_music_playback";
-    static final String ACTION_PLAY_PAUSE = "com.sur.music.PLAY_PAUSE";
-    static final String ACTION_PREVIOUS = "com.sur.music.PREVIOUS";
-    static final String ACTION_NEXT = "com.sur.music.NEXT";
     SeekBar seek;
     TextView fullTitle, fullArtist, timeNow, timeEnd;
     ImageView albumArt;
@@ -59,6 +56,13 @@ public class MainActivity extends Activity {
     boolean fullPlayer = false;
     boolean updatingSeek = false;
     Handler handler = new Handler();
+
+    MediaSession mediaSession;
+    NotificationManager notificationManager;
+    static final String CHANNEL_ID = "sur_music_playback";
+    static final String ACTION_PLAY_PAUSE = "com.sur.music.PLAY_PAUSE";
+    static final String ACTION_PREVIOUS = "com.sur.music.PREVIOUS";
+    static final String ACTION_NEXT = "com.sur.music.NEXT";
 
     ArrayList<String> titles = new ArrayList<>();
     ArrayList<String> artists = new ArrayList<>();
@@ -92,20 +96,190 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         buildHome();
+        setupMediaSession();
+        createNotificationChannel();
+        requestNotificationPermission();
         requestMusicPermission();
     }
 
-    void requestMusicPermission() {
-        setupMediaSession();
-        createNotificationChannel();
+    void setupMediaSession() {
+        mediaSession = new MediaSession(this, "SurMusic");
+        mediaSession.setCallback(new MediaSession.Callback() {
+            @Override public void onPlay() {
+                runOnUiThread(() -> toggle());
+            }
 
+            @Override public void onPause() {
+                runOnUiThread(() -> {
+                    if (player != null && player.isPlaying()) toggle();
+                });
+            }
+
+            @Override public void onSkipToNext() {
+                runOnUiThread(() -> next());
+            }
+
+            @Override public void onSkipToPrevious() {
+                runOnUiThread(() -> previous());
+            }
+        });
+        mediaSession.setActive(true);
+    }
+
+    void createNotificationChannel() {
+        notificationManager =
+                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "Sur Music Playback",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("Music playback controls");
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+
+    void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 &&
-                checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(
-                    new String[]{"android.permission.POST_NOTIFICATIONS"}, 60);
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, 60);
+        }
+    }
+
+    PendingIntent notificationAction(String action) {
+        Intent intent = new Intent(this, NotificationReceiver.class);
+        intent.setAction(action);
+        return PendingIntent.getBroadcast(
+                this,
+                action.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT |
+                        (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+    }
+
+    void updateMediaSession() {
+        if (mediaSession == null) return;
+
+        boolean playing = player != null && player.isPlaying();
+
+        if (current >= 0 && current < titles.size()) {
+            MediaMetadata metadata = new MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, titles.get(current))
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, artists.get(current))
+                    .putLong(
+                            MediaMetadata.METADATA_KEY_DURATION,
+                            player != null ? Math.max(0, player.getDuration()) : 0)
+                    .build();
+            mediaSession.setMetadata(metadata);
         }
 
+        PlaybackState.Builder state = new PlaybackState.Builder()
+                .setActions(
+                        PlaybackState.ACTION_PLAY |
+                        PlaybackState.ACTION_PAUSE |
+                        PlaybackState.ACTION_PLAY_PAUSE |
+                        PlaybackState.ACTION_SKIP_TO_NEXT |
+                        PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                )
+                .setState(
+                        playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
+                        player != null ? player.getCurrentPosition() : 0,
+                        playing ? 1f : 0f
+                );
+
+        mediaSession.setPlaybackState(state.build());
+        showPlaybackNotification();
+    }
+
+    void showPlaybackNotification() {
+        if (notificationManager == null || current < 0 || current >= titles.size())
+            return;
+
+        boolean playing = player != null && player.isPlaying();
+
+        Intent openIntent = new Intent(this, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP |
+                Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this, 100, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT |
+                        (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
+        );
+
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= 26) {
+            builder = new Notification.Builder(this, CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(this);
+        }
+
+        builder.setSmallIcon(com.sur.music.R.drawable.ic_sur_icon)
+                .setContentTitle(titles.get(current))
+                .setContentText(artists.get(current))
+                .setContentIntent(contentIntent)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setOngoing(playing)
+                .setOnlyAlertOnce(true)
+                .addAction(new Notification.Action.Builder(
+                        null, "⏮", notificationAction(ACTION_PREVIOUS)).build())
+                .addAction(new Notification.Action.Builder(
+                        null, playing ? "Ⅱ" : "▶",
+                        notificationAction(ACTION_PLAY_PAUSE)).build())
+                .addAction(new Notification.Action.Builder(
+                        null, "⏭", notificationAction(ACTION_NEXT)).build());
+
+        if (Build.VERSION.SDK_INT >= 21) {
+            builder.setStyle(new Notification.MediaStyle()
+                    .setMediaSession(mediaSession.getSessionToken())
+                    .setShowActionsInCompactView(0, 1, 2));
+        }
+
+        notificationManager.notify(1001, builder.build());
+    }
+
+    void hidePlaybackNotification() {
+        if (notificationManager != null)
+            notificationManager.cancel(1001);
+    }
+
+    public static class NotificationReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Intent activityIntent = new Intent(context, MainActivity.class);
+            activityIntent.setAction(intent.getAction());
+            activityIntent.setFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK |
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP |
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+            );
+            context.startActivity(activityIntent);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+
+        String action = intent.getAction();
+        if (ACTION_PLAY_PAUSE.equals(action)) {
+            toggle();
+        } else if (ACTION_PREVIOUS.equals(action)) {
+            previous();
+        } else if (ACTION_NEXT.equals(action)) {
+            next();
+        }
+        if (intent.getAction() != null) {
+            intent.setAction(null);
+        }
+    }
+
+    void requestMusicPermission() {
         if (Build.VERSION.SDK_INT >= 33) {
             if (checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -516,11 +690,10 @@ public class MainActivity extends Activity {
 
             current = i;
             player.start();
-            updateMediaSession();
-            showPlaybackNotification();
             miniTitle.setText(titles.get(i));
             miniArtist.setText(artists.get(i));
             updatePlayButtons();
+            updateMediaSession();
 
             player.setOnCompletionListener(mp -> next());
             if (fullPlayer) updateFullPlayer();
@@ -541,7 +714,7 @@ public class MainActivity extends Activity {
             player.start();
         }
         updatePlayButtons();
-        showPlaybackNotification();
+        updateMediaSession();
     }
 
     void previous() {
@@ -554,134 +727,6 @@ public class MainActivity extends Activity {
         if (titles.isEmpty()) return;
         int n = current < 0 || current >= titles.size() - 1 ? 0 : current + 1;
         play(n);
-    }
-
-    void setupMediaSession() {
-        mediaSession = new MediaSession(this, "SurMusicSession");
-        mediaSession.setFlags(
-                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
-        );
-
-        mediaSession.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() {
-                if (player == null && current >= 0) play(current);
-                else if (player != null && !player.isPlaying()) {
-                    player.start();
-                    updatePlayButtons();
-                    showPlaybackNotification();
-                }
-            }
-
-            @Override public void onPause() {
-                if (player != null && player.isPlaying()) {
-                    player.pause();
-                    updatePlayButtons();
-                    showPlaybackNotification();
-                }
-            }
-
-            @Override public void onSkipToNext() {
-                next();
-            }
-
-            @Override public void onSkipToPrevious() {
-                previous();
-            }
-        });
-
-        mediaSession.setActive(true);
-    }
-
-    void createNotificationChannel() {
-        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "Sur Music Playback",
-                    NotificationManager.IMPORTANCE_LOW
-            );
-            channel.setDescription("Music playback controls");
-            channel.setShowBadge(false);
-            notificationManager.createNotificationChannel(channel);
-        }
-    }
-
-    void showPlaybackNotification() {
-        if (current < 0 || notificationManager == null) return;
-
-        Intent openIntent = new Intent(this, MainActivity.class);
-        openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent contentIntent = PendingIntent.getActivity(
-                this, 100, openIntent,
-                Build.VERSION.SDK_INT >= 23
-                        ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                        : PendingIntent.FLAG_UPDATE_CURRENT
-        );
-
-        PendingIntent previousIntent = notificationAction(ACTION_PREVIOUS, 101);
-        PendingIntent playIntent = notificationAction(ACTION_PLAY_PAUSE, 102);
-        PendingIntent nextIntent = notificationAction(ACTION_NEXT, 103);
-
-        boolean playing = player != null && player.isPlaying();
-
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? new Notification.Builder(this, CHANNEL_ID)
-                : new Notification.Builder(this);
-
-        builder.setSmallIcon(com.sur.music.R.drawable.ic_sur_icon)
-                .setContentTitle(titles.get(current))
-                .setContentText(artists.get(current))
-                .setContentIntent(contentIntent)
-                .setOnlyAlertOnce(true)
-                .setOngoing(playing)
-                .setShowWhen(false)
-                .addAction(new Notification.Action.Builder(
-                        android.R.drawable.ic_media_previous, "Previous", previousIntent).build())
-                .addAction(new Notification.Action.Builder(
-                        playing ? android.R.drawable.ic_media_pause
-                                : android.R.drawable.ic_media_play,
-                        playing ? "Pause" : "Play", playIntent).build())
-                .addAction(new Notification.Action.Builder(
-                        android.R.drawable.ic_media_next, "Next", nextIntent).build());
-
-        if (mediaSession != null) {
-            builder.setStyle(new Notification.MediaStyle()
-                    .setMediaSession(mediaSession.getSessionToken())
-                    .setShowActionsInCompactView(0, 1, 2));
-        }
-
-        if (Build.VERSION.SDK_INT < 33 ||
-                checkSelfPermission("android.permission.POST_NOTIFICATIONS")
-                        == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            notificationManager.notify(7, builder.build());
-        }
-    }
-
-    PendingIntent notificationAction(String action, int requestCode) {
-        Intent intent = new Intent(this, NotificationReceiver.class);
-        intent.setAction(action);
-        return PendingIntent.getBroadcast(
-                this, requestCode, intent,
-                Build.VERSION.SDK_INT >= 23
-                        ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-                        : PendingIntent.FLAG_UPDATE_CURRENT
-        );
-    }
-
-    void hidePlaybackNotification() {
-        if (notificationManager != null) notificationManager.cancel(7);
-    }
-
-    public static class NotificationReceiver extends BroadcastReceiver {
-        @Override public void onReceive(android.content.Context context, Intent intent) {
-            Intent i = new Intent(context, MainActivity.class);
-            i.setAction(intent.getAction());
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK |
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP |
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            context.startActivity(i);
-        }
     }
 
     void showFullPlayer() {
@@ -869,7 +914,7 @@ public class MainActivity extends Activity {
                             if (player != null && player.isPlaying()) {
                                 player.pause();
                                 updatePlayButtons();
-                                showPlaybackNotification();
+                                updateMediaSession();
                             }
                             sleepTimer = null;
                             Toast.makeText(MainActivity.this,
@@ -931,19 +976,6 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        if (intent == null || intent.getAction() == null) return;
-
-        String action = intent.getAction();
-        if (ACTION_PLAY_PAUSE.equals(action)) toggle();
-        else if (ACTION_PREVIOUS.equals(action)) previous();
-        else if (ACTION_NEXT.equals(action)) next();
-
-        setIntent(new Intent(this, MainActivity.class));
-    }
-
-    @Override
     public void onBackPressed() {
         if (fullPlayer) {
             showHome();
@@ -955,15 +987,15 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int r, String[] p, int[] g) {
         super.onRequestPermissionsResult(r, p, g);
-
-        if (r == 60 && g.length > 0 &&
-                g[0] == PackageManager.PERMISSION_GRANTED && current >= 0) {
-            showPlaybackNotification();
-        }
-        if (r == 50 && g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED)
+        if (r == 50 && g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
             loadSongs();
-        else
+        } else if (r == 60) {
+            if (g.length > 0 && g[0] == PackageManager.PERMISSION_GRANTED) {
+                if (player != null && current >= 0) updateMediaSession();
+            }
+        } else {
             Toast.makeText(this, "Music permission is required", Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override
@@ -978,4 +1010,4 @@ public class MainActivity extends Activity {
         if (player != null) player.release();
         super.onDestroy();
     }
-    }
+                               }
