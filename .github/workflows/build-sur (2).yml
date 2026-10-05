@@ -82,6 +82,7 @@ jobs:
           "        <activity" \
           "            android:name=\".MainActivity\"" \
           "            android:screenOrientation=\"portrait\"" \
+          "            android:launchMode=\"singleTop\"" \
           "            android:exported=\"true\">" \
           "            <intent-filter>" \
           "                <action android:name=\"android.intent.action.MAIN\" />" \
@@ -119,12 +120,11 @@ jobs:
             exit 1
           fi
 
-          # Fix missing Java imports in the old UI source.
-          sed -i '/^package com\.sur\.music;/a import android.database.Cursor;\nimport android.graphics.drawable.GradientDrawable;' app/src/main/java/com/sur/music/MainActivity.java
-
           test -f settings.gradle
+          test -f build.gradle
           test -f app/build.gradle
           test -f app/src/main/AndroidManifest.xml
+          test -f app/src/main/res/drawable/ic_sur_icon.xml
           test -f app/src/main/java/com/sur/music/MainActivity.java
 
       - name: Build APK
