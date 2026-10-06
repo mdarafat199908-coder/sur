@@ -528,21 +528,39 @@ public class MainActivity extends Activity {
     }
 
     void addHomeSongRow(final int i) {
+        boolean isPlayingRow = (i == current);
+
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, dp(7), 0, dp(7));
+        row.setPadding(dp(8), dp(7), dp(4), dp(7));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackgroundColor(Color.TRANSPARENT);
+        row.setBackground(bg(
+                isPlayingRow
+                        ? (isDarkTheme() ? Color.rgb(24, 42, 68) : Color.rgb(232, 241, 255))
+                        : Color.TRANSPARENT,
+                10));
         row.setOnClickListener(v -> play(i));
 
         LinearLayout line = new LinearLayout(this);
         line.setGravity(Gravity.CENTER_VERTICAL);
 
+        TextView marker = tv(isPlayingRow ? "▶" : "", 15,
+                isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210));
+        marker.setGravity(Gravity.CENTER);
+        line.addView(marker, new LinearLayout.LayoutParams(dp(28), dp(58)));
+
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(0, 0, dp(6), 0);
 
-        TextView title = tv(titles.get(i), 16, primaryText());
+        int rowTitleColor = isPlayingRow
+                ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210))
+                : primaryText();
+        int rowMetaColor = isPlayingRow
+                ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(55, 120, 205))
+                : secondaryText();
+
+        TextView title = tv(titles.get(i), 16, rowTitleColor);
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -550,7 +568,7 @@ public class MainActivity extends Activity {
         TextView meta = tv(
                 artists.get(i) + "–Unknown album",
                 12,
-                secondaryText());
+                rowMetaColor);
         meta.setSingleLine(true);
         meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
 
@@ -1722,9 +1740,12 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (fullPlayer) {
             showHome();
-        } else {
-            super.onBackPressed();
+            return;
         }
+
+        // Keep the Activity and MediaPlayer alive when the user presses Back.
+        // This sends Sur to the background instead of destroying the player.
+        moveTaskToBack(true);
     }
 
     @Override
@@ -1772,4 +1793,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-}
+            }
