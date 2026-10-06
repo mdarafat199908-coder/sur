@@ -163,14 +163,47 @@ public class MainActivity extends Activity {
 
     void setupMediaSession() {
         mediaSession = new MediaSession(this, "SurMusic");
+
+        Intent openIntent = new Intent(this, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP |
+                Intent.FLAG_ACTIVITY_CLEAR_TOP);
+
+        PendingIntent sessionActivity = PendingIntent.getActivity(
+                this,
+                101,
+                openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT |
+                        (Build.VERSION.SDK_INT >= 23
+                                ? PendingIntent.FLAG_IMMUTABLE
+                                : 0)
+        );
+
+        mediaSession.setSessionActivity(sessionActivity);
+        mediaSession.setFlags(
+                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
+                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        );
+
         mediaSession.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() {
-                runOnUiThread(() -> toggle());
+                runOnUiThread(() -> {
+                    if (player == null && current >= 0) {
+                        play(current);
+                    } else if (player != null && !player.isPlaying()) {
+                        player.start();
+                        updatePlayButtons();
+                        updateMediaSession();
+                    }
+                });
             }
 
             @Override public void onPause() {
                 runOnUiThread(() -> {
-                    if (player != null && player.isPlaying()) toggle();
+                    if (player != null && player.isPlaying()) {
+                        player.pause();
+                        updatePlayButtons();
+                        updateMediaSession();
+                    }
                 });
             }
 
@@ -182,6 +215,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> previous());
             }
         });
+
         mediaSession.setActive(true);
     }
 
@@ -229,31 +263,42 @@ public class MainActivity extends Activity {
         boolean playing = player != null && player.isPlaying();
 
         if (current >= 0 && current < titles.size()) {
-            MediaMetadata metadata = new MediaMetadata.Builder()
+            MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                     .putString(MediaMetadata.METADATA_KEY_TITLE, titles.get(current))
-                    .putString(MediaMetadata.METADATA_KEY_ARTIST, artists.get(current))
-                    .putLong(
-                            MediaMetadata.METADATA_KEY_DURATION,
-                            player != null ? Math.max(0, player.getDuration()) : 0)
-                    .build();
-            mediaSession.setMetadata(metadata);
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, artists.get(current));
+
+            if (player != null) {
+                metadata.putLong(
+                        MediaMetadata.METADATA_KEY_DURATION,
+                        Math.max(0, player.getDuration())
+                );
+            }
+
+            mediaSession.setMetadata(metadata.build());
         }
 
-        PlaybackState.Builder state = new PlaybackState.Builder()
-                .setActions(
-                        PlaybackState.ACTION_PLAY |
-                        PlaybackState.ACTION_PAUSE |
-                        PlaybackState.ACTION_PLAY_PAUSE |
-                        PlaybackState.ACTION_SKIP_TO_NEXT |
-                        PlaybackState.ACTION_SKIP_TO_PREVIOUS
-                )
-                .setState(
-                        playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
-                        player != null ? player.getCurrentPosition() : 0,
-                        playing ? 1f : 0f
-                );
+        long actions = PlaybackState.ACTION_PLAY |
+                PlaybackState.ACTION_PAUSE |
+                PlaybackState.ACTION_SKIP_TO_NEXT |
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS;
 
-        mediaSession.setPlaybackState(state.build());
+        if (Build.VERSION.SDK_INT >= 21) {
+            actions |= PlaybackState.ACTION_PLAY_PAUSE;
+        }
+
+        PlaybackState state = new PlaybackState.Builder()
+                .setActions(actions)
+                .setState(
+                        playing
+                                ? PlaybackState.STATE_PLAYING
+                                : PlaybackState.STATE_PAUSED,
+                        player != null ? player.getCurrentPosition() : 0L,
+                        playing ? 1f : 0f
+                )
+                .build();
+
+        mediaSession.setPlaybackState(state);
+        mediaSession.setActive(true);
         showPlaybackNotification();
     }
 
@@ -268,9 +313,13 @@ public class MainActivity extends Activity {
                 Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
         PendingIntent contentIntent = PendingIntent.getActivity(
-                this, 100, openIntent,
+                this,
+                100,
+                openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT |
-                        (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
+                        (Build.VERSION.SDK_INT >= 23
+                                ? PendingIntent.FLAG_IMMUTABLE
+                                : 0)
         );
 
         Notification.Builder builder;
@@ -287,15 +336,29 @@ public class MainActivity extends Activity {
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(playing)
                 .setOnlyAlertOnce(true)
-                .addAction(new Notification.Action.Builder(
-                        null, "⏮", notificationAction(ACTION_PREVIOUS)).build())
-                .addAction(new Notification.Action.Builder(
-                        null, playing ? "Ⅱ" : "▶",
-                        notificationAction(ACTION_PLAY_PAUSE)).build())
-                .addAction(new Notification.Action.Builder(
-                        null, "⏭", notificationAction(ACTION_NEXT)).build());
+                .setCategory(Notification.CATEGORY_TRANSPORT);
 
-        if (Build.VERSION.SDK_INT >= 21) {
+        // Android 13+ builds the media controls from PlaybackState.
+        // Keep manual actions only for older Android versions.
+        if (Build.VERSION.SDK_INT < 33) {
+            builder.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_media_previous,
+                    "Previous",
+                    notificationAction(ACTION_PREVIOUS)).build());
+
+            builder.addAction(new Notification.Action.Builder(
+                    playing ? android.R.drawable.ic_media_pause
+                            : android.R.drawable.ic_media_play,
+                    playing ? "Pause" : "Play",
+                    notificationAction(ACTION_PLAY_PAUSE)).build());
+
+            builder.addAction(new Notification.Action.Builder(
+                    android.R.drawable.ic_media_next,
+                    "Next",
+                    notificationAction(ACTION_NEXT)).build());
+        }
+
+        if (Build.VERSION.SDK_INT >= 21 && mediaSession != null) {
             builder.setStyle(new Notification.MediaStyle()
                     .setMediaSession(mediaSession.getSessionToken())
                     .setShowActionsInCompactView(0, 1, 2));
