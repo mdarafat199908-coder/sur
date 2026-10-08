@@ -1325,6 +1325,13 @@ public class MainActivity extends Activity {
                 fullArtist,
                 new LinearLayout.LayoutParams(-1, dp(27)));
 
+        // Sleep timer countdown - keep it visible on the Now Playing screen
+        timerRemaining = tv("Timer বন্ধ", 13, NOW_GRAY);
+        timerRemaining.setGravity(Gravity.CENTER);
+        page.addView(
+                timerRemaining,
+                new LinearLayout.LayoutParams(-1, dp(30)));
+
         // Main controls
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
@@ -1763,4 +1770,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-    }
+                        }
