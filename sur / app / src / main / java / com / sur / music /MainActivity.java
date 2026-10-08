@@ -1026,19 +1026,6 @@ public class MainActivity extends Activity {
         showHome();
     }
 
-    void startMusicKeepAlive() {
-        try {
-            Intent serviceIntent = new Intent(this, MusicService.class);
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent);
-            else startService(serviceIntent);
-        } catch (Exception ignored) { }
-    }
-
-    void stopMusicKeepAlive() {
-        try { stopService(new Intent(this, MusicService.class)); }
-        catch (Exception ignored) { }
-    }
-
     void play(int i) {
         if (i < 0 || i >= uris.size()) return;
 
@@ -1051,7 +1038,6 @@ public class MainActivity extends Activity {
 
             current = i;
             player.start();
-            startMusicKeepAlive();
 
             miniTitle.setText(titles.get(i));
             miniArtist.setText(artists.get(i));
@@ -1082,10 +1068,8 @@ public class MainActivity extends Activity {
 
         if (player.isPlaying()) {
             player.pause();
-            stopMusicKeepAlive();
         } else {
             player.start();
-            startMusicKeepAlive();
         }
 
         updatePlayButtons();
@@ -1341,10 +1325,12 @@ public class MainActivity extends Activity {
                 fullArtist,
                 new LinearLayout.LayoutParams(-1, dp(27)));
 
-        // Sleep timer remaining time
+        // Sleep timer countdown - keep it visible on the Now Playing screen
         timerRemaining = tv("Timer বন্ধ", 13, NOW_GRAY);
         timerRemaining.setGravity(Gravity.CENTER);
-        page.addView(timerRemaining, new LinearLayout.LayoutParams(-1, dp(28)));
+        page.addView(
+                timerRemaining,
+                new LinearLayout.LayoutParams(-1, dp(30)));
 
         // Main controls
         LinearLayout controls = new LinearLayout(this);
@@ -1629,7 +1615,6 @@ public class MainActivity extends Activity {
 
                 if (player != null && player.isPlaying()) {
                     player.pause();
-                    stopMusicKeepAlive();
                     updatePlayButtons();
                     updateMediaSession();
                 }
@@ -1780,12 +1765,9 @@ public class MainActivity extends Activity {
             mediaSession.release();
         }
 
-        // Keep the MediaPlayer alive while the foreground playback service is active.
-        if (player != null && !player.isPlaying()) {
+        if (player != null)
             player.release();
-            player = null;
-        }
 
         super.onDestroy();
     }
-                }
+                    }
