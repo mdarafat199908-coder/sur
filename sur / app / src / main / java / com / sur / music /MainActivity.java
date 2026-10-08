@@ -163,32 +163,14 @@ public class MainActivity extends Activity {
 
     void setupMediaSession() {
         mediaSession = new MediaSession(this, "SurMusic");
-
-        mediaSession.setFlags(
-                MediaSession.FLAG_HANDLES_MEDIA_BUTTONS |
-                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
-        );
-
         mediaSession.setCallback(new MediaSession.Callback() {
             @Override public void onPlay() {
-                runOnUiThread(() -> {
-                    if (player == null && current >= 0) {
-                        play(current);
-                    } else if (player != null && !player.isPlaying()) {
-                        player.start();
-                        updatePlayButtons();
-                        updateMediaSession();
-                    }
-                });
+                runOnUiThread(() -> toggle());
             }
 
             @Override public void onPause() {
                 runOnUiThread(() -> {
-                    if (player != null && player.isPlaying()) {
-                        player.pause();
-                        updatePlayButtons();
-                        updateMediaSession();
-                    }
+                    if (player != null && player.isPlaying()) toggle();
                 });
             }
 
@@ -200,7 +182,6 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> previous());
             }
         });
-
         mediaSession.setActive(true);
     }
 
@@ -277,88 +258,52 @@ public class MainActivity extends Activity {
     }
 
     void showPlaybackNotification() {
-        if (notificationManager == null ||
-                current < 0 ||
-                current >= titles.size()) {
+        if (notificationManager == null || current < 0 || current >= titles.size())
             return;
-        }
 
         boolean playing = player != null && player.isPlaying();
 
         Intent openIntent = new Intent(this, MainActivity.class);
-        openIntent.setFlags(
-                Intent.FLAG_ACTIVITY_SINGLE_TOP |
-                Intent.FLAG_ACTIVITY_CLEAR_TOP
-        );
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP |
+                Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
         PendingIntent contentIntent = PendingIntent.getActivity(
-                this,
-                100,
-                openIntent,
+                this, 100, openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT |
-                        (Build.VERSION.SDK_INT >= 23
-                                ? PendingIntent.FLAG_IMMUTABLE
-                                : 0)
+                        (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0)
         );
 
         Notification.Builder builder;
-
         if (Build.VERSION.SDK_INT >= 26) {
             builder = new Notification.Builder(this, CHANNEL_ID);
         } else {
             builder = new Notification.Builder(this);
         }
 
-        Notification.Action previousAction =
-                new Notification.Action.Builder(
-                        android.R.drawable.ic_media_previous,
-                        "Previous",
-                        notificationAction(ACTION_PREVIOUS)
-                ).build();
-
-        int playIcon = playing
-                ? android.R.drawable.ic_media_pause
-                : android.R.drawable.ic_media_play;
-
-        String playText = playing ? "Pause" : "Play";
-
-        Notification.Action playPauseAction =
-                new Notification.Action.Builder(
-                        playIcon,
-                        playText,
-                        notificationAction(ACTION_PLAY_PAUSE)
-                ).build();
-
-        Notification.Action nextAction =
-                new Notification.Action.Builder(
-                        android.R.drawable.ic_media_next,
-                        "Next",
-                        notificationAction(ACTION_NEXT)
-                ).build();
-
-        builder
-                .setSmallIcon(com.sur.music.R.drawable.ic_sur_icon)
+        builder.setSmallIcon(com.sur.music.R.drawable.ic_sur_icon)
                 .setContentTitle(titles.get(current))
                 .setContentText(artists.get(current))
                 .setContentIntent(contentIntent)
                 .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .setOngoing(playing)
                 .setOnlyAlertOnce(true)
-                .setCategory(Notification.CATEGORY_TRANSPORT)
-                .addAction(previousAction)
-                .addAction(playPauseAction)
-                .addAction(nextAction);
+                .addAction(new Notification.Action.Builder(
+                        null, "⏮", notificationAction(ACTION_PREVIOUS)).build())
+                .addAction(new Notification.Action.Builder(
+                        null, playing ? "Ⅱ" : "▶",
+                        notificationAction(ACTION_PLAY_PAUSE)).build())
+                .addAction(new Notification.Action.Builder(
+                        null, "⏭", notificationAction(ACTION_NEXT)).build());
 
-        if (Build.VERSION.SDK_INT >= 21 && mediaSession != null) {
-            builder.setStyle(
-                    new Notification.MediaStyle()
-                            .setMediaSession(mediaSession.getSessionToken())
-                            .setShowActionsInCompactView(0, 1, 2)
-            );
+        if (Build.VERSION.SDK_INT >= 21) {
+            builder.setStyle(new Notification.MediaStyle()
+                    .setMediaSession(mediaSession.getSessionToken())
+                    .setShowActionsInCompactView(0, 1, 2));
         }
 
         notificationManager.notify(1001, builder.build());
     }
+
     void hidePlaybackNotification() {
         if (notificationManager != null)
             notificationManager.cancel(1001);
@@ -1081,6 +1026,19 @@ public class MainActivity extends Activity {
         showHome();
     }
 
+    void startMusicKeepAlive() {
+        try {
+            Intent serviceIntent = new Intent(this, MusicService.class);
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(serviceIntent);
+            else startService(serviceIntent);
+        } catch (Exception ignored) { }
+    }
+
+    void stopMusicKeepAlive() {
+        try { stopService(new Intent(this, MusicService.class)); }
+        catch (Exception ignored) { }
+    }
+
     void play(int i) {
         if (i < 0 || i >= uris.size()) return;
 
@@ -1093,6 +1051,7 @@ public class MainActivity extends Activity {
 
             current = i;
             player.start();
+            startMusicKeepAlive();
 
             miniTitle.setText(titles.get(i));
             miniArtist.setText(artists.get(i));
@@ -1123,8 +1082,10 @@ public class MainActivity extends Activity {
 
         if (player.isPlaying()) {
             player.pause();
+            stopMusicKeepAlive();
         } else {
             player.start();
+            startMusicKeepAlive();
         }
 
         updatePlayButtons();
@@ -1224,8 +1185,8 @@ public class MainActivity extends Activity {
         topMore.setTextSize(25);
         topMore.setTextColor(Color.BLACK);
         topMore.setBackgroundColor(Color.TRANSPARENT);
-        topMore.setContentDescription("Sleep Timer");
-        topMore.setOnClickListener(v -> showSleepTimer());
+        topMore.setContentDescription("More options");
+        topMore.setOnClickListener(v -> showNowPlayingMoreMenu());
 
         top.addView(
                 topMore,
@@ -1380,6 +1341,11 @@ public class MainActivity extends Activity {
                 fullArtist,
                 new LinearLayout.LayoutParams(-1, dp(27)));
 
+        // Sleep timer remaining time
+        timerRemaining = tv("Timer বন্ধ", 13, NOW_GRAY);
+        timerRemaining.setGravity(Gravity.CENTER);
+        page.addView(timerRemaining, new LinearLayout.LayoutParams(-1, dp(28)));
+
         // Main controls
         LinearLayout controls = new LinearLayout(this);
         controls.setGravity(Gravity.CENTER);
@@ -1424,11 +1390,10 @@ public class MainActivity extends Activity {
                 favorites.contains(uris.get(current).toString())
                         ? "♥" : "♡");
         Button repeat = bottomAction("↻");
-        Button more = bottomAction("⏰");
+        Button sleep = bottomAction("⏰");
 
-        // Sleep Timer button
-        more.setContentDescription("Sleep Timer");
-        more.setOnClickListener(v -> {
+        sleep.setContentDescription("Sleep Timer");
+        sleep.setOnClickListener(v -> {
             showSleepTimer();
         });
 
@@ -1460,7 +1425,7 @@ public class MainActivity extends Activity {
                         0, dp(60), 1));
 
         actions.addView(
-                more,
+                sleep,
                 new LinearLayout.LayoutParams(
                         0, dp(60), 1));
 
@@ -1543,6 +1508,61 @@ public class MainActivity extends Activity {
         }
     }
 
+    void showNowPlayingMoreMenu() {
+        if (current < 0 || current >= titles.size()) return;
+
+        String[] options = {
+                "Add to Playlist",
+                "Repeat",
+                "Song Info",
+                "Share",
+                "Add to Queue"
+        };
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(titles.get(current))
+                .setItems(options, (dialog, which) -> {
+                    if (which == 0) {
+                        showPlaylistsPage();
+                    } else if (which == 1) {
+                        Toast.makeText(this, "Repeat option selected", Toast.LENGTH_SHORT).show();
+                    } else if (which == 2) {
+                        showCurrentSongInfo();
+                    } else if (which == 3) {
+                        shareCurrentSong();
+                    } else if (which == 4) {
+                        Toast.makeText(this, "Song added to queue", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .show();
+    }
+
+    void showCurrentSongInfo() {
+        if (current < 0 || current >= titles.size()) return;
+
+        String duration = player != null ? format(player.getDuration()) : "Unknown";
+        String info = "Song: " + titles.get(current) + "\n\n" +
+                "Artist: " + artists.get(current) + "\n\n" +
+                "Duration: " + duration;
+
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Song Info")
+                .setMessage(info)
+                .setPositiveButton("OK", null)
+                .show();
+    }
+
+    void shareCurrentSong() {
+        if (current < 0 || current >= titles.size()) return;
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT,
+                titles.get(current) + " - " + artists.get(current));
+
+        startActivity(Intent.createChooser(shareIntent, "Share Song"));
+    }
+
     void showSleepTimer() {
         final String[] choices = {
                 "Off",
@@ -1609,6 +1629,7 @@ public class MainActivity extends Activity {
 
                 if (player != null && player.isPlaying()) {
                     player.pause();
+                    stopMusicKeepAlive();
                     updatePlayButtons();
                     updateMediaSession();
                 }
@@ -1759,9 +1780,12 @@ public class MainActivity extends Activity {
             mediaSession.release();
         }
 
-        if (player != null)
+        // Keep the MediaPlayer alive while the foreground playback service is active.
+        if (player != null && !player.isPlaying()) {
             player.release();
+            player = null;
+        }
 
         super.onDestroy();
     }
-}
+                }
