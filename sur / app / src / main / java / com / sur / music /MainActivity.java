@@ -467,9 +467,13 @@ public class MainActivity extends Activity {
     void addHomeSongRow(final int i) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
-        row.setPadding(0, dp(7), 0, dp(7));
+        row.setPadding(dp(8), dp(7), dp(4), dp(7));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackgroundColor(Color.TRANSPARENT);
+        row.setBackground(bg(
+                isDarkTheme()
+                        ? (i == current ? PLAYING_BLUE : Color.TRANSPARENT)
+                        : (i == current ? Color.rgb(238, 232, 255) : Color.TRANSPARENT),
+                12));
         row.setOnClickListener(v -> play(i));
 
         LinearLayout line = new LinearLayout(this);
@@ -479,7 +483,12 @@ public class MainActivity extends Activity {
         info.setOrientation(LinearLayout.VERTICAL);
         info.setPadding(0, 0, dp(6), 0);
 
-        TextView title = tv(titles.get(i), 16, primaryText());
+        TextView title = tv(
+                (i == current ? "▶  " : "") + titles.get(i),
+                16,
+                i == current
+                        ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210))
+                        : primaryText());
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         title.setSingleLine(true);
         title.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -487,7 +496,9 @@ public class MainActivity extends Activity {
         TextView meta = tv(
                 artists.get(i) + "–Unknown album",
                 12,
-                secondaryText());
+                i == current
+                        ? (isDarkTheme() ? PLAYING_BLUE_TEXT : Color.rgb(25, 105, 210))
+                        : secondaryText());
         meta.setSingleLine(true);
         meta.setEllipsize(android.text.TextUtils.TruncateAt.END);
 
@@ -1770,4 +1781,4 @@ public class MainActivity extends Activity {
 
         super.onDestroy();
     }
-                    }
+}
